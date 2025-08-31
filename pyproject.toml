@@ -1,0 +1,46 @@
+
+[tool.briefcase]
+project_name = "BitcoinZ Wallet"
+bundle = "com.btcz"
+version = "1.0.0"
+url = "https://getbtcz.com"
+license.file = "LICENSE"
+author = "BTCZCommunity"
+author_email = "None"
+
+[tool.briefcase.app.BTCZWallet]
+formal_name = "BTCZWallet"
+description = """BitcoinZ Wallet Client (Android)
+"""
+icon = "BTCZWallet/images/BitcoinZ"
+sources = [
+    "BTCZWallet",
+]
+test_sources = [
+    "tests",
+]
+
+requires = [
+]
+test_requires = [
+    "pytest",
+]
+
+[tool.briefcase.app.BTCZWallet.android]
+requires = [
+    "toga-android==0.4.7",
+    "travertino==0.3.0"
+]
+
+base_theme = "Theme.AppCompat.NoActionBar"
+
+accent_color = "#f0d802"
+primary_color = "#f0d802"
+primary_color_dark = "#1e2124"
+splash_background_color = "#1e2124"
+
+build_gradle_dependencies = [
+    "com.google.android.material:material:1.12.0",
+    "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0",
+    "org.osmdroid:osmdroid-android:6.1.20"
+]
