@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from toga import App, MainWindow, Box, ImageView, Label, Button, ScrollContainer
-from .framework import MainActivity, AppProxy
+from .framework import MainActivity, AppProxy, QRScanner
 from toga.style.pack import Pack
 from toga.constants import COLUMN, CENTER, BOLD, ROW
 from toga.colors import rgb, WHITE, YELLOW, BLACK, GRAY
@@ -19,6 +19,7 @@ class BitcoinZGUI(MainWindow):
         version = self.app.version
         self.utils = Utils(self.app, self.app.activity)
         self.device_storage = DeviceStorage(self.app)
+        self.qr_scanner = QRScanner(self.app.activity)
         self.script_path = Path(__file__).resolve().parent
 
         self.tor_window = None
