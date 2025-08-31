@@ -7,7 +7,7 @@ from toga.style.pack import Pack
 from toga.constants import COLUMN, CENTER, BOLD, ROW
 from toga.colors import rgb, WHITE, YELLOW, BLACK, GRAY
 
-from .resources import Utils, DeviceStorage
+from .resources import Utils, DeviceStorage, ServerSetup
 
 
 
@@ -152,6 +152,24 @@ class BitcoinZGUI(MainWindow):
             self.tor_icon,
             self.tor_button
         )
+
+
+    async def check_device_account(self, widget):
+        device_auth = self.device_storage.get_auth()
+        if device_auth:
+            return
+        self.tor_button.style.color = BLACK
+        self.tor_button.style.background_color = YELLOW
+        self.tor_button.enabled = True
+
+
+    async def show_tor_window(self, button):
+        self.main_box.clear()
+        tor_window = ServerSetup(
+            self.app, self, self.qr_scanner, self.script_path, self.utils
+        )
+        self.main_box.add(tor_window)
+        self.app.window_toggle = True
 
 
 

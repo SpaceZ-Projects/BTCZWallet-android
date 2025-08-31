@@ -1,4 +1,11 @@
 
+import hashlib
+import hmac
+import json
+from datetime import datetime, timezone
+import aiohttp
+from aiohttp.client_exceptions import ClientError, ClientConnectionError
+from aiohttp_socks import ProxyConnector, ProxyConnectionError, ProxyError
 
 from toga import App
 from ..framework import Configuration, Point
@@ -30,3 +37,32 @@ class Utils:
         else:
             x = height
         return x
+    
+
+    async def make_request(self, key, secret, url, params = None):
+        if params is None:
+            params = {}
+        connector = ProxyConnector.from_url(f'socks5://127.0.0.1:9050')
+        timestamp = datetime.now(timezone.utc).isoformat()
+        message = f"{timestamp}.{json.dumps(params, separators=(',', ':'), sort_keys=True)}"
+        signature = hmac.new(
+            secret.encode(),
+            message.encode(),
+            hashlib.sha512
+        ).hexdigest()
+        headers = {
+            'Authorization': key,
+            'X-Timestamp': timestamp,
+            'X-Signature': signature
+        }
+        try:
+            async with aiohttp.ClientSession(connector=connector) as session:
+                async with session.get(url, headers=headers, params=params) as response:
+                    data = await response.json()
+                    await session.close()
+                    return data
+        except (ProxyConnectionError, ProxyError, ClientError, ClientConnectionError):
+            return None
+        except Exception as e:
+            print(e)
+            return None

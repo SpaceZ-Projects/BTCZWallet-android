@@ -5,6 +5,7 @@ import time
 from java import dynamic_proxy, cast
 from java.lang import Runnable
 from java.util import Arrays
+from android.view import View
 from android.content import ClipboardManager, ClipData
 from android.content.res import Configuration
 from android.graphics import Point
@@ -97,6 +98,17 @@ class AppProxy(dynamic_proxy(IPythonApp)):
     
     def Restart(self):
         MainActivity.singletonThis.Restart()
+
+
+class ClickListener(dynamic_proxy(View.OnClickListener)):
+    def __init__(self, callback):
+        super().__init__()
+        self.callback = callback
+
+    def onClick(self, view):
+        result = self.callback(view)
+        if asyncio.iscoroutine(result):
+            asyncio.create_task(result)
 
 
 class ToastMessage:
