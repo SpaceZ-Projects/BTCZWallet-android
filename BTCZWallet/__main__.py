@@ -8,7 +8,9 @@ from toga.style.pack import Pack
 from toga.constants import COLUMN, CENTER, BOLD, ROW
 from toga.colors import rgb, WHITE, YELLOW, BLACK, GRAY
 
-from .resources import Utils, ServerSetup, Menu, DeviceStorage
+from .resources import (
+    Utils, ServerSetup, Menu, DeviceStorage, Units
+)
 
 
 
@@ -19,6 +21,7 @@ class BitcoinZGUI(MainWindow):
         self.proxy = proxy
         version = self.app.version
         self.utils = Utils(self.app, self.app.activity)
+        self.units = Units()
         self.device_storage = DeviceStorage(self.app)
         self.qr_scanner = QRScanner(self.app.activity)
         self.script_path = Path(__file__).resolve().parent
@@ -160,7 +163,9 @@ class BitcoinZGUI(MainWindow):
         device_auth = self.device_storage.get_auth()
         if device_auth:
             await asyncio.sleep(1)
-            self.app.main_window.content = Menu(self.app, self, self.script_path, self.utils)
+            self.app.main_window.content = Menu(
+                self.app, self, self.script_path, self.utils, self.units
+            )
             return
         self.tor_button.style.color = BLACK
         self.tor_button.style.background_color = YELLOW
@@ -171,7 +176,7 @@ class BitcoinZGUI(MainWindow):
     async def show_tor_window(self, button):
         self.main_box.clear()
         tor_window = ServerSetup(
-            self.app, self, self.qr_scanner, self.script_path, self.utils
+            self.app, self, self.qr_scanner, self.script_path, self.utils, self.units
         )
         self.main_box.add(tor_window)
         self.app.window_toggle = True

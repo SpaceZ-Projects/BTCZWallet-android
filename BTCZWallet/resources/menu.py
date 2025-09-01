@@ -8,13 +8,13 @@ from ..framework import ToastMessage
 from .home import Home
 from .receive import Receive
 from .send import Send
-from .storage import WalletStorage, DeviceStorage
+from .storage import WalletStorage, DeviceStorage, TxsStorage
 
 
 class Menu(OptionContainer):
-    def __init__(self, app:App, main:MainWindow, script_path, utils):
+    def __init__(self, app:App, main:MainWindow, script_path, utils, units):
 
-        self.home_page = Home(app, utils)
+        self.home_page = Home(app, main, utils, units)
         self.home_option = OptionItem(
             text="Home",
             content=self.home_page,
@@ -47,6 +47,7 @@ class Menu(OptionContainer):
 
         self.device_storage = DeviceStorage(self.app)
         self.wallet_storage = WalletStorage(self.app)
+        self.txs_storage = TxsStorage(self.app)
 
         self.server_status = None
 
@@ -91,6 +92,8 @@ class Menu(OptionContainer):
 
     def run_tasks(self):
         self.app.add_background_task(self.update_server_status)
+        self.app.add_background_task(self.update_balances)
+        self.app.add_background_task(self.update_transactions)
 
 
     async def update_server_status(self, widget):
@@ -110,3 +113,50 @@ class Menu(OptionContainer):
             self.home_page.update_status(status, color)
 
             await asyncio.sleep(30)
+
+
+    async def update_balances(self, widget):
+        while True:
+            if not self.server_status:
+                await asyncio.sleep(1)
+                continue
+            device_auth = self.device_storage.get_auth()
+            url = f'http://{device_auth[0]}/balances'
+            result = await self.utils.make_request(device_auth[1], device_auth[2], url)
+            if result:
+                transparent = result.get('transparent')
+                shielded = result.get('shielded')
+                self.wallet_storage.update_balances(transparent, shielded)
+
+            await asyncio.sleep(20)
+
+
+    async def update_transactions(self, widget):
+        while True:
+            if not self.server_status:
+                await asyncio.sleep(1)
+                continue
+            transactions_data = self.txs_storage.get_transactions(option=True)
+            device_auth = self.device_storage.get_auth()
+            url = f'http://{device_auth[0]}/transactions'
+            result = await self.utils.make_request(device_auth[1], device_auth[2], url)
+            if result:
+                for data in result:
+                    tx_type = data.get('type')
+                    category = data.get('category')
+                    address = data.get('address')
+                    txid = data.get('txid')
+                    amount = float(data.get('amount') or 0.0)
+                    blocks = int(data.get('blocks') or 0)
+                    txfee = float(data.get('fee') or 0.0)
+                    timestamp = int(data.get('timestamp') or 0)
+                    if txid not in transactions_data:
+                        self.insert_transaction(tx_type, category, address, txid, amount, blocks, txfee, timestamp)
+
+            await asyncio.sleep(15)
+
+    
+    def insert_transaction(self, tx_type, category, address, txid, amount, blocks, txfee, timestamp):
+        self.txs_storage.insert_transaction(
+            tx_type, category, address, txid, amount, blocks, txfee, timestamp
+        )

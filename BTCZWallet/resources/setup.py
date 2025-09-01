@@ -12,7 +12,7 @@ from .storage import DeviceStorage
 
 
 class ServerSetup(ScrollContainer):
-    def __init__(self, app:App, main:MainWindow, qr_scanner, script_path, utils):
+    def __init__(self, app:App, main:MainWindow, qr_scanner, script_path, utils, units):
         super().__init__()
 
         self.style= Pack(
@@ -24,6 +24,7 @@ class ServerSetup(ScrollContainer):
         self.qr_scanner = qr_scanner
         self.script_path = script_path
         self.utils = utils
+        self.units = units
 
         self.device_storage = DeviceStorage(self.app)
 
@@ -318,4 +319,4 @@ class ServerSetup(ScrollContainer):
             ToastMessage("Failed to connect to the server")
             return
         self.device_storage.insert_auth(hostname, auth, secret)
-        self.app.main_window.content = Menu(self.app, self.main, self.script_path, self.utils)
+        self.app.main_window.content = Menu(self.app, self.main, self.script_path, self.utils, self.units)

@@ -1,5 +1,5 @@
 
 from .androidz import (
-    CopyText, AppProxy, ToastMessage, Configuration, Point, MainActivity,
-    QRScanner, ClickListener
+    ClickListener, CopyText, AppProxy, MainActivity, QRScanner,
+    ToastMessage, Configuration, Point
 )

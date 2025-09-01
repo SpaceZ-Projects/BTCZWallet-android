@@ -3,12 +3,13 @@ import hashlib
 import hmac
 import json
 from datetime import datetime, timezone
-import aiohttp
-from aiohttp.client_exceptions import ClientError, ClientConnectionError, ServerDisconnectedError
-from aiohttp_socks import ProxyConnector, ProxyConnectionError, ProxyError
 
 from toga import App
 from ..framework import Configuration, Point
+
+import aiohttp
+from aiohttp.client_exceptions import ClientError, ClientConnectionError, ServerDisconnectedError
+from aiohttp_socks import ProxyConnector, ProxyConnectionError, ProxyError
 
 
 

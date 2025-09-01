@@ -1,0 +1,323 @@
+
+import asyncio
+import operator
+
+from toga import App, MainWindow, Box, ScrollContainer, Label
+from toga.style.pack import Pack
+from toga.constants import COLUMN, ROW, CENTER, BOLD
+from toga.colors import rgb, GRAY, YELLOW, WHITE
+
+from .txs import Transaction
+from .storage import WalletStorage, TxsStorage
+
+
+class Home(Box):
+    def __init__(self, app:App, main:MainWindow, utils, units):
+        super().__init__(
+            style=Pack(
+                direction = COLUMN,
+                background_color = rgb(40,43,48),
+                flex = 1,
+                alignment=CENTER
+            )
+        )
+
+        self.app = app
+        self.main = main
+        self.utils = utils
+        self.units = units
+
+        self.wallet_storage = WalletStorage(self.app)
+        self.txs_storage = TxsStorage(self.app)
+
+        self.transactions_ids = []
+
+        x = self.utils.screen_resolution()
+        if 1200 < x <= 1600:
+            total_size = 21
+            text_size = 15
+        elif 800 < x <= 1200:
+            total_size = 18
+            text_size = 12
+        elif 480 < x <= 800:
+            total_size = 16
+            text_size = 10
+        else:
+            total_size = 24
+            text_size = 18
+
+        self.status_label = Label(
+            text="Status :",
+            style=Pack(
+                color = GRAY,
+                font_size=text_size,
+                font_weight=BOLD,
+                background_color = rgb(40,43,48),
+                padding = (10,0,5,10)
+            )
+        )
+
+        self.status_value = Label(
+            text="",
+            style=Pack(
+                color = GRAY,
+                font_size=text_size,
+                font_weight=BOLD,
+                background_color = rgb(40,43,48),
+                flex = 1,
+                padding = (10,0,5,10)
+            )
+        )
+
+        self.status_box = Box(
+            style=Pack(
+                direction=ROW,
+                background_color = rgb(40,43,48),
+                flex = 1
+            )
+        )
+
+        self.total_label = Label(
+            text="Total Balances",
+            style=Pack(
+                color = WHITE,
+                font_size=total_size,
+                text_align=CENTER,
+                flex = 1,
+                padding = (30,0,0,0)
+            )
+        )
+
+        self.total_value = Label(
+            text="0.00000000",
+            style=Pack(
+                color=WHITE,
+                font_size=total_size,
+                font_weight=BOLD,
+                background_color=rgb(30,33,36),
+                text_align=CENTER,
+                flex = 1,
+                padding = (10,0,0,0)
+            )
+        )
+
+        self.total_box = Box(
+            style=Pack(
+                direction = COLUMN,
+                background_color=rgb(30,33,36),
+                flex = 2,
+                alignment = CENTER
+            )
+        )
+
+        self.transparent_label = Label(
+            text="Transparent",
+            style=Pack(
+                color = GRAY,
+                background_color=rgb(40,43,48),
+                font_size=text_size,
+                text_align=CENTER
+            )
+        )
+
+        self.transparent_value = Label(
+            text="0.00000000",
+            style=Pack(
+                color = YELLOW,
+                background_color=rgb(40,43,48),
+                font_size=text_size,
+                text_align=CENTER,
+                font_weight=BOLD
+            )
+        )
+
+        self.transparent_box = Box(
+            style=Pack(
+                direction = COLUMN,
+                background_color=rgb(40,43,48),
+                flex = 1,
+                alignment=CENTER,
+                padding = 2
+            )
+        )
+
+        self.shielded_label = Label(
+            text="Shielded",
+            style=Pack(
+                color = GRAY,
+                background_color=rgb(40,43,48),
+                font_size=text_size,
+                text_align=CENTER
+            )
+        )
+
+        self.shielded_value = Label(
+            text="0.00000000",
+            style=Pack(
+                color = rgb(114,137,218),
+                background_color=rgb(40,43,48),
+                font_size=text_size,
+                text_align=CENTER,
+                font_weight=BOLD
+            )
+        )
+
+        self.shielded_box = Box(
+            style=Pack(
+                direction = COLUMN,
+                background_color=rgb(40,43,48),
+                flex = 1,
+                alignment=CENTER,
+                padding = 2
+            )
+        )
+
+        self.balances_details = Box(
+            style=Pack(
+                direction = ROW,
+                background_color=rgb(30,33,36),
+                flex = 1,
+                alignment = CENTER
+            )
+        )
+
+        self.balances_box = Box(
+            style=Pack(
+                direction = COLUMN,
+                background_color=rgb(30,33,36),
+                flex = 9,
+                alignment=CENTER
+            )
+        )
+
+        self.wallet_box = Box(
+            style=Pack(
+                direction=COLUMN,
+                background_color = rgb(30,33,36),
+                flex = 1.5,
+                alignment=CENTER
+            )
+        )
+
+        self.transactions_scroll = ScrollContainer(
+            vertical=True,
+            horizontal=False,
+            style=Pack(
+                background_color = rgb(40,43,48),
+                flex=1
+            )
+        )
+        self.transactions_box = Box(
+            style=Pack(
+                direction = COLUMN,
+                background_color = rgb(40,43,48),
+                alignment=CENTER,
+                flex=1
+            )
+        )
+        self.transactions_scroll.content = self.transactions_box
+
+        self.info_box = Box(
+            style=Pack(
+                direction = COLUMN,
+                background_color = rgb(40,43,48),
+                flex = 2,
+                alignment=CENTER
+            )
+        )
+
+        self.add(
+            self.wallet_box,
+            self.info_box
+        )
+        self.wallet_box.add(
+            self.status_box,
+            self.balances_box
+        )
+        self.status_box.add(
+            self.status_label,
+            self.status_value
+        )
+        self.balances_box.add(
+            self.total_box,
+            self.balances_details
+        )
+        self.total_box.add(
+            self.total_label,
+            self.total_value
+        )
+        self.balances_details.add(
+            self.transparent_box,
+            self.shielded_box
+        )
+        self.transparent_box.add(
+            self.transparent_label,
+            self.transparent_value
+        )
+        self.shielded_box.add(
+            self.shielded_label,
+            self.shielded_value
+        )
+        self.info_box.add(
+            self.transactions_scroll
+        )
+
+        self.app.add_background_task(self.update_balances)
+        self.app.add_background_task(self.load_transactions)
+
+
+    def update_status(self, status, color):
+        self.status_value.style.color = color
+        self.status_value.text = status
+
+    
+    async def update_balances(self, widget):
+        while True:
+            wallet = self.wallet_storage.get_addresses()
+            if wallet:
+                for data in wallet:
+                    tbalance = data[2]
+                    zbalance = data[3]
+                    total_balances = tbalance + zbalance
+                    self.transparent_value.text = self.units.format_balance(tbalance)
+                    self.shielded_value.text = self.units.format_balance(zbalance)
+                    self.total_value.text = self.units.format_balance(total_balances)
+                
+            await asyncio.sleep(5)
+
+
+    async def load_transactions(self, widget):
+        transactions = self.txs_storage.get_transactions()
+        transactions = sorted(
+            transactions,
+            key=operator.itemgetter(7),
+            reverse=True
+        )
+        for data in transactions:
+            txid = data[3]
+            if txid not in self.transactions_ids:
+                transaction_info = Transaction(self.main, self.utils, self.units, data)
+                self.transactions_box.add(transaction_info)
+                self.transactions_ids.append(txid)
+                await asyncio.sleep(0.0)
+
+        self.app.add_background_task(self.update_transactions)
+
+
+    async def update_transactions(self, widget):
+        while True:
+            transactions = self.txs_storage.get_transactions()
+            transactions = sorted(
+                transactions,
+                key=operator.itemgetter(7),
+                reverse=False
+            )
+            for data in transactions:
+                txid = data[3]
+                if txid not in self.transactions_ids:
+                    transaction_info = Transaction(self.main, self.utils, self.units, data)
+                    self.transactions_box.insert(0, transaction_info)
+                    self.transactions_ids.append(txid)
+                    await asyncio.sleep(0.0)
+            
+            await asyncio.sleep(5)
