@@ -7,6 +7,7 @@ from toga.style.pack import Pack
 from toga.constants import COLUMN, ROW, CENTER, BOLD
 from toga.colors import rgb, WHITE, BLACK, GREENYELLOW, GRAY
 
+from .menu import Menu
 from .storage import DeviceStorage
 
 
@@ -317,3 +318,4 @@ class ServerSetup(ScrollContainer):
             ToastMessage("Failed to connect to the server")
             return
         self.device_storage.insert_auth(hostname, auth, secret)
+        self.app.main_window.content = Menu(self.app, self.main, self.script_path, self.utils)

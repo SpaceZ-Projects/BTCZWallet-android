@@ -1,4 +1,5 @@
 
+import asyncio
 from pathlib import Path
 
 from toga import App, MainWindow, Box, ImageView, Label, Button, ScrollContainer
@@ -7,7 +8,7 @@ from toga.style.pack import Pack
 from toga.constants import COLUMN, CENTER, BOLD, ROW
 from toga.colors import rgb, WHITE, YELLOW, BLACK, GRAY
 
-from .resources import Utils, DeviceStorage, ServerSetup
+from .resources import Utils, ServerSetup, Menu, DeviceStorage
 
 
 
@@ -136,6 +137,7 @@ class BitcoinZGUI(MainWindow):
         self.main_scroll.content = self.main_box
 
         self.show_wizard()
+        self.app.add_background_task(self.check_device_account)
 
 
     def show_wizard(self):
@@ -153,15 +155,18 @@ class BitcoinZGUI(MainWindow):
             self.tor_button
         )
 
-
+    
     async def check_device_account(self, widget):
         device_auth = self.device_storage.get_auth()
         if device_auth:
+            await asyncio.sleep(1)
+            self.app.main_window.content = Menu(self.app, self, self.script_path, self.utils)
             return
         self.tor_button.style.color = BLACK
         self.tor_button.style.background_color = YELLOW
         self.tor_button.enabled = True
 
+        
 
     async def show_tor_window(self, button):
         self.main_box.clear()
@@ -176,16 +181,19 @@ class BitcoinZGUI(MainWindow):
 class BitcoinZWallet(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        
+
         self.proxy = AppProxy()
         self.proxy._back_callback = self.on_back_pressed
         self.activity = MainActivity.singletonThis
         
         self.window_toggle = None
 
+
     def startup(self):
+        MainActivity.setPythonApp(self.proxy)
         self.main_window = BitcoinZGUI(self.proxy)
         self.main_window.show()
+
 
     def on_back_pressed(self):
         def on_result(widget, result):

@@ -4,7 +4,7 @@ import hmac
 import json
 from datetime import datetime, timezone
 import aiohttp
-from aiohttp.client_exceptions import ClientError, ClientConnectionError
+from aiohttp.client_exceptions import ClientError, ClientConnectionError, ServerDisconnectedError
 from aiohttp_socks import ProxyConnector, ProxyConnectionError, ProxyError
 
 from toga import App
@@ -37,6 +37,20 @@ class Utils:
         else:
             x = height
         return x
+    
+
+    async def is_tor_alive(self):
+        try:
+            connector = ProxyConnector.from_url(f'socks5://127.0.0.1:9050')
+            async with aiohttp.ClientSession(connector=connector) as session:
+                async with session.get('http://check.torproject.org', timeout=10) as response:
+                    await response.text()
+                    return True
+        except (ProxyConnectionError, ClientConnectionError, ServerDisconnectedError) as e:
+            return None
+        except Exception as e:
+            print(e)
+            return None
     
 
     async def make_request(self, key, secret, url, params = None):
