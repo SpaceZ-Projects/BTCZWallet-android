@@ -102,7 +102,16 @@ class Transaction(Box):
 
 
     def show_tx_info(self, view):
+        confirmations = (self.main.current_blocks - self.blocks) + 1
         self.main.info_dialog(
             title="Transaction Info",
-            message=f"Type : {self.tx_type}\nCategory : {self.category}\nTxID : {self.txid}\nBlocks : {self.blocks}\nAmount : {self.amount}\nFee : {self.txfee}"
+            message={
+                f"Type : {self.tx_type}\n"
+                f"Category : {self.category}\n"
+                f"Confirmations : {confirmations}\n"
+                f"TxID : {self.txid}\n"
+                f"Blocks : {self.blocks}\n"
+                f"Amount : {self.amount}\n"
+                f"Fee : {self.txfee}"
+            }
         )

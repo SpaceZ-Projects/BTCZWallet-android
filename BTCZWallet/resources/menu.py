@@ -110,6 +110,14 @@ class Menu(OptionContainer):
                 self.server_status = True
                 status = "Online"
                 color = GREENYELLOW
+                height = result.get('height')
+                currency = result.get('currency')
+                price = result.get('price')
+                
+                self.main.current_blocks = height
+                self.main.currency = currency
+                self.main.price = price
+
             self.home_page.update_status(status, color)
 
             await asyncio.sleep(30)

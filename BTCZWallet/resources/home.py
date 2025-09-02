@@ -69,6 +69,17 @@ class Home(Box):
             )
         )
 
+        self.height_label = Label(
+            text="Height : NaN",
+            style=Pack(
+                color=GRAY,
+                font_size=text_size,
+                background_color = rgb(40,43,48),
+                text_align=CENTER,
+                padding = (10,10,0,0)
+            )
+        )
+
         self.status_box = Box(
             style=Pack(
                 direction=ROW,
@@ -84,7 +95,7 @@ class Home(Box):
                 font_size=total_size,
                 text_align=CENTER,
                 flex = 1,
-                padding = (30,0,0,0)
+                padding = (20,0,0,0)
             )
         )
 
@@ -97,6 +108,28 @@ class Home(Box):
                 background_color=rgb(30,33,36),
                 text_align=CENTER,
                 flex = 1,
+                padding = (10,0,0,0)
+            )
+        )
+
+        self.price_label = Label(
+            text="BTCZ Price : NaN",
+            style=Pack(
+                color=GRAY,
+                font_size=text_size,
+                background_color=rgb(30,33,36),
+                text_align=CENTER,
+                padding = (10,0,0,0)
+            )
+        )
+
+        self.funds_label = Label(
+            text="Total : NaN",
+            style=Pack(
+                color=WHITE,
+                font_size=text_size,
+                background_color=rgb(30,33,36),
+                text_align=CENTER,
                 padding = (10,0,0,0)
             )
         )
@@ -236,7 +269,8 @@ class Home(Box):
         )
         self.status_box.add(
             self.status_label,
-            self.status_value
+            self.status_value,
+            self.height_label
         )
         self.balances_box.add(
             self.total_box,
@@ -244,7 +278,9 @@ class Home(Box):
         )
         self.total_box.add(
             self.total_label,
-            self.total_value
+            self.total_value,
+            self.price_label,
+            self.funds_label
         )
         self.balances_details.add(
             self.transparent_box,
@@ -269,6 +305,10 @@ class Home(Box):
     def update_status(self, status, color):
         self.status_value.style.color = color
         self.status_value.text = status
+        if self.main.current_blocks:
+            self.height_label.text = f"Height : {self.main.current_blocks}"
+        if self.main.price:
+            self.price_label.text = f"BTCZ Price : {self.units.format_price(self.main.price)} {self.main.currency.upper()}"
 
     
     async def update_balances(self, widget):
@@ -282,6 +322,9 @@ class Home(Box):
                     self.transparent_value.text = self.units.format_balance(tbalance)
                     self.shielded_value.text = self.units.format_balance(zbalance)
                     self.total_value.text = self.units.format_balance(total_balances)
+                    if self.main.price:
+                        total_funds = total_balances * float(self.main.price)
+                        self.funds_label.text = f"Total : {self.units.format_price(total_funds)} {self.main.currency.upper()}"
                 
             await asyncio.sleep(5)
 

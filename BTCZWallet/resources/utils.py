@@ -1,8 +1,10 @@
 
+import os
 import hashlib
 import hmac
 import json
 from datetime import datetime, timezone
+import qrcode
 
 from toga import App
 from ..framework import Configuration, Point
@@ -18,6 +20,9 @@ class Utils:
 
         self.app = app
         self.activity = activity
+
+        if not os.path.exists(self.app.paths.cache):
+            os.makedirs(self.app.paths.cache)
 
 
     def screen_size(self):
@@ -81,3 +86,24 @@ class Utils:
         except Exception as e:
             print(e)
             return None
+        
+
+    def qr_generate(self, address):
+        qr_filename = f"qr_{address}.png"
+        qr_path = os.path.join(self.app.paths.cache, qr_filename)
+        if os.path.exists(qr_path):
+            return qr_path
+        
+        qr = qrcode.QRCode(
+            version=2,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=7,
+            border=1,
+        )
+        qr.add_data(address)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        with open(qr_path, 'wb') as f:
+            qr_img.save(f)
+        
+        return qr_path
