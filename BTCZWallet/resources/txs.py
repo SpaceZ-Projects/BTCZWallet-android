@@ -2,7 +2,7 @@
 from datetime import datetime
 
 from toga import MainWindow, Box, Label
-from ..framework import ClickListener
+from ..framework import ClickListener, ToastMessage
 from toga.style.pack import Pack
 from toga.colors import rgb, GREENYELLOW, RED, WHITE
 from toga.constants import ROW, CENTER, BOLD
@@ -102,7 +102,11 @@ class Transaction(Box):
 
 
     def show_tx_info(self, view):
-        confirmations = (self.main.current_blocks - self.blocks) + 1
+        try:
+            confirmations = (self.main.current_blocks - self.blocks) + 1
+        except Exception:
+            ToastMessage("Failed to load transaction")
+            return
         self.main.info_dialog(
             title="Transaction Info",
             message={

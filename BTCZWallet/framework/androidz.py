@@ -2,12 +2,15 @@
 import asyncio
 import time
 
-from java import dynamic_proxy, cast
+from java import dynamic_proxy, cast, jclass
 from java.lang import Runnable
 from java.util import Arrays
+from java.io import FileInputStream
+from android.net import Uri
 from android.view import View
 from android.content import ClipboardManager, ClipData
 from android.content.res import Configuration
+from androidx.documentfile.provider import DocumentFile
 from android.graphics import Point
 from androidx.activity.result import ActivityResultCallback
 from android.widget import Toast
@@ -77,6 +80,45 @@ class QRScanner:
 
         if self._future and not self._future.done():
             self._future.set_result(contents)
+
+
+
+class SelectFolderCallback(dynamic_proxy(ActivityResultCallback)):
+    def __init__(self, picker):
+        super().__init__()
+        self.picker = picker
+
+    def onActivityResult(self, uri):
+        if uri:
+            self.picker._set_result(uri.toString())
+        else:
+            self.picker._set_result(None)
+
+
+
+class SelectFolderDialog:
+    def __init__(self, activity):
+        self.activity = activity
+        self._future = None
+
+        callback_proxy = SelectFolderCallback(self)
+        self._launcher = self.activity.registerForActivityResult(
+            jclass("androidx.activity.result.contract.ActivityResultContracts$OpenDocumentTree")(),
+            callback_proxy
+        )
+
+    async def pick_folder(self):
+        self._future = asyncio.get_event_loop().create_future()
+
+        def launch_intent():
+            self._launcher.launch(None)
+
+        self.activity.runOnUiThread(RunnableProxy(launch_intent))
+        return await self._future
+
+    def _set_result(self, folder_uri):
+        if self._future and not self._future.done():
+            self._future.set_result(folder_uri)
 
 
 class AppProxy(dynamic_proxy(IPythonApp)):

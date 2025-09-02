@@ -3,7 +3,7 @@ import asyncio
 from pathlib import Path
 
 from toga import App, MainWindow, Box, ImageView, Label, Button, ScrollContainer
-from .framework import MainActivity, AppProxy, QRScanner
+from .framework import MainActivity, AppProxy, QRScanner, SelectFolderDialog
 from toga.style.pack import Pack
 from toga.constants import COLUMN, CENTER, BOLD, ROW
 from toga.colors import rgb, WHITE, YELLOW, BLACK, GRAY
@@ -24,6 +24,7 @@ class BitcoinZGUI(MainWindow):
         self.units = Units()
         self.device_storage = DeviceStorage(self.app)
         self.qr_scanner = QRScanner(self.app.activity)
+        self.select_folder = SelectFolderDialog(self.app.activity)
         self.script_path = Path(__file__).resolve().parent
 
         self.tor_window = None

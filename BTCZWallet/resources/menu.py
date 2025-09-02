@@ -20,7 +20,7 @@ class Menu(OptionContainer):
             content=self.home_page,
             icon=f"{script_path}/images/wallet.png"
         )
-        self.receive_page = Receive(app, utils)
+        self.receive_page = Receive(app, main, utils)
         self.receive_option = OptionItem(
             text="Receive",
             content=self.receive_page,
