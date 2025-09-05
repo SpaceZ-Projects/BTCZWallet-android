@@ -28,6 +28,8 @@ class BitcoinZGUI(MainWindow):
         self.script_path = Path(__file__).resolve().parent
 
         self.tor_window = None
+        self.tbalance = None
+        self.zbalance = None
         self.current_blocks = None
         self.currency = None
         self.price = None
@@ -144,7 +146,7 @@ class BitcoinZGUI(MainWindow):
         self.main_scroll.content = self.main_box
 
         self.show_wizard()
-        self.app.add_background_task(self.check_device_account)
+        asyncio.create_task(self.check_device_account())
 
 
     def show_wizard(self):
@@ -163,7 +165,7 @@ class BitcoinZGUI(MainWindow):
         )
 
     
-    async def check_device_account(self, widget):
+    async def check_device_account(self):
         device_auth = self.device_storage.get_auth()
         if device_auth:
             await asyncio.sleep(1)
@@ -207,7 +209,7 @@ class BitcoinZWallet(App):
     def on_back_pressed(self):
         def on_result(widget, result):
             if result is True:
-                self.activity.finish()
+                self.proxy.Exit()
         if self.window_toggle:
             self.main_window.main_box.clear()
             self.main_window.show_wizard()

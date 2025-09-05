@@ -62,6 +62,8 @@ class Utils:
     async def make_request(self, key, secret, url, params = None):
         if params is None:
             params = {}
+        params = {k: str(v) for k, v in params.items()}
+        
         connector = ProxyConnector.from_url(f'socks5://127.0.0.1:9050')
         timestamp = datetime.now(timezone.utc).isoformat()
         message = f"{timestamp}.{json.dumps(params, separators=(',', ':'), sort_keys=True)}"

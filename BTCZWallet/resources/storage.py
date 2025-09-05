@@ -38,7 +38,6 @@ class TxsStorage:
 
 
     def insert_transaction(self, tx_type, category, address, txid, amount, blocks, fee, timestamp):
-        print(blocks)
         self.create_transactions_table()
         conn = sqlite3.connect(self.data)
         cursor = conn.cursor()
@@ -65,7 +64,7 @@ class TxsStorage:
             conn.close()
             return transaction
         except sqlite3.OperationalError:
-            return []
+            return None
         
 
     def get_transactions(self, option = None):
@@ -84,6 +83,19 @@ class TxsStorage:
             return transactions
         except sqlite3.OperationalError:
             return []
+        
+    
+    def update_transaction(self, txid, blocks):
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            UPDATE transactions
+            SET blocks = ? WHERE txid = ?
+            ''', (blocks, txid)
+        )
+        conn.commit()
+        conn.close()
 
 
 

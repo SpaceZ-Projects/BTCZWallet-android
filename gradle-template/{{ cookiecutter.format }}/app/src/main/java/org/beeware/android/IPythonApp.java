@@ -11,6 +11,7 @@ public interface IPythonApp {
     void onStart();
     void onBackPressed();
     void Restart();
+    void Exit();
     void onActivityResult(int requestCode, int resultCode, Intent data);
     void onConfigurationChanged(Configuration newConfig);
     boolean onOptionsItemSelected(MenuItem menuitem);

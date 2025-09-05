@@ -9,6 +9,7 @@ from java.io import FileInputStream
 from android.net import Uri
 from android.view import View
 from android.content import ClipboardManager, ClipData
+from android.text import InputType
 from android.content.res import Configuration
 from androidx.documentfile.provider import DocumentFile
 from android.graphics import Point
@@ -127,6 +128,7 @@ class AppProxy(dynamic_proxy(IPythonApp)):
 
         self._back_callback = None
         self._qr_callback = None
+        self._config_changed_callback = None
 
     def onBackPressed(self):
         if self._back_callback:
@@ -138,8 +140,27 @@ class AppProxy(dynamic_proxy(IPythonApp)):
                 print("Back callback error:", e)
         return False
     
+    def onConfigurationChanged(self, newConfig):
+        if self._config_changed_callback:
+            try:
+                self._config_changed_callback(newConfig)
+            except Exception as e:
+                print("Configuration change callback error:", e)
+    
     def Restart(self):
         MainActivity.singletonThis.Restart()
+
+    def Exit(self):
+        MainActivity.singletonThis.Exit()
+
+
+class FocusChangeListener(dynamic_proxy(View.OnFocusChangeListener)):
+    def __init__(self, callback):
+        super().__init__()
+        self._callback = callback
+
+    def onFocusChange(self, v, hasFocus):
+        self._callback(v, bool(hasFocus))
 
 
 class ClickListener(dynamic_proxy(View.OnClickListener)):

@@ -1,13 +1,13 @@
 
 import os
 
-from toga import App, MainWindow, Box, Button, ImageView
+from toga import App, MainWindow, Box, Button, ImageView, MultilineTextInput
 from ..framework import (
     CopyText, ToastMessage, Uri, DocumentFile,
     FileInputStream
 )
 from toga.style.pack import Pack
-from toga.constants import COLUMN, ROW, CENTER
+from toga.constants import COLUMN, ROW, CENTER, BOLD
 from toga.colors import rgb, BLACK, YELLOW, GRAY, WHITE, GREENYELLOW
 
 from .storage import WalletStorage
@@ -92,6 +92,21 @@ class Receive(Box):
             )
         )
 
+        self.address_output = MultilineTextInput(
+            style=Pack(
+                color=WHITE,
+                font_size=text_size,
+                text_align=CENTER,
+                background_color=rgb(40,43,48),
+                font_weight=BOLD,
+                padding = (0,10,0,10)
+            )
+        )
+        self.address_output._impl.native.setFocusable(False)
+        self.address_output._impl.native.setCursorVisible(False)
+        self.address_output._impl.native.setLongClickable(False)
+        self.address_output._impl.native.setTextIsSelectable(False)
+
         self.copy_button = Button(
             text="Copy",
             style=Pack(
@@ -140,6 +155,7 @@ class Receive(Box):
         )
         self.qr_box.add(
             self.qr_view,
+            self.address_output,
             self.qr_bottons_box
         )
         self.qr_bottons_box.add(
@@ -157,6 +173,7 @@ class Receive(Box):
             self.qr_image = self.utils.qr_generate(self.address)
             if self.qr_image:
                 self.qr_view.image = self.qr_image
+                self.address_output.value = self.address
 
 
     async def show_transparent_qr(self, button):
@@ -186,15 +203,16 @@ class Receive(Box):
         if not self.qr_image or not os.path.exists(self.qr_image):
             ToastMessage("No QR image to save")
             return
+        context = App.app.current_window._impl.app.native
         try:
             folder_uri = Uri.parse(folder_uri_str)
-            folder_doc = DocumentFile.fromTreeUri(self.context, folder_uri)
+            folder_doc = DocumentFile.fromTreeUri(context, folder_uri)
 
             if folder_doc is None or not folder_doc.canWrite():
                 ToastMessage("Cannot write to selected folder")
                 return
 
-            filename = os.path.basename(self._qr_image)
+            filename = os.path.basename(self.qr_image)
             existing = folder_doc.findFile(filename)
             if existing:
                 existing.delete()
@@ -204,9 +222,9 @@ class Receive(Box):
             if new_file is None:
                 ToastMessage("Failed to create file")
                 return
-            resolver = self.context.getContentResolver()
+            resolver = context.getContentResolver()
             output_stream = resolver.openOutputStream(new_file.getUri())
-            input_stream = FileInputStream(self._qr_image)
+            input_stream = FileInputStream(self.qr_image)
             buffer = bytearray(4096)
             length = input_stream.read(buffer)
             while length > 0:

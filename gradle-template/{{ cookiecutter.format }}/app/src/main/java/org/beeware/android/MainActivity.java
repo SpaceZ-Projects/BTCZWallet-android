@@ -163,6 +163,12 @@ public class MainActivity extends AppCompatActivity {
             Runtime.getRuntime().exit(0);
         }
     }
+    public void Exit() {
+        Log.d(TAG, "ExitApp() start");
+        finishAffinity();
+        android.os.Process.killProcess(android.os.Process.myPid());
+        System.exit(0);
+    }
     protected void onDestroy() {
         Log.d(TAG, "onDestroy() start");
         super.onDestroy();

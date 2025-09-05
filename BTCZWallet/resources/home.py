@@ -298,8 +298,8 @@ class Home(Box):
             self.transactions_scroll
         )
 
-        self.app.add_background_task(self.update_balances)
-        self.app.add_background_task(self.load_transactions)
+        asyncio.create_task(self.update_balances())
+        asyncio.create_task(self.load_transactions())
 
 
     def update_status(self, status, color):
@@ -311,7 +311,7 @@ class Home(Box):
             self.price_label.text = f"BTCZ Price : {self.units.format_price(self.main.price)} {self.main.currency.upper()}"
 
     
-    async def update_balances(self, widget):
+    async def update_balances(self):
         while True:
             wallet = self.wallet_storage.get_addresses()
             if wallet:
@@ -325,11 +325,13 @@ class Home(Box):
                     if self.main.price:
                         total_funds = total_balances * float(self.main.price)
                         self.funds_label.text = f"Total : {self.units.format_price(total_funds)} {self.main.currency.upper()}"
+                    self.main.tbalance = tbalance
+                    self.main.zbalance = zbalance
                 
             await asyncio.sleep(5)
 
 
-    async def load_transactions(self, widget):
+    async def load_transactions(self):
         transactions = self.txs_storage.get_transactions()
         transactions = sorted(
             transactions,
@@ -338,16 +340,15 @@ class Home(Box):
         )
         for data in transactions:
             txid = data[3]
-            if txid not in self.transactions_ids:
-                transaction_info = Transaction(self.main, self.utils, self.units, data)
-                self.transactions_box.add(transaction_info)
-                self.transactions_ids.append(txid)
-                await asyncio.sleep(0.0)
+            transaction_info = Transaction(self.app, self.main, self.utils, self.units, data)
+            self.transactions_box.add(transaction_info)
+            self.transactions_ids.append(txid)
+            await asyncio.sleep(0.0)
 
-        self.app.add_background_task(self.update_transactions)
+        asyncio.create_task(self.update_transactions())
 
 
-    async def update_transactions(self, widget):
+    async def update_transactions(self):
         while True:
             transactions = self.txs_storage.get_transactions()
             transactions = sorted(
@@ -358,7 +359,7 @@ class Home(Box):
             for data in transactions:
                 txid = data[3]
                 if txid not in self.transactions_ids:
-                    transaction_info = Transaction(self.main, self.utils, self.units, data)
+                    transaction_info = Transaction(self.app, self.main, self.utils, self.units, data)
                     self.transactions_box.insert(0, transaction_info)
                     self.transactions_ids.append(txid)
                     await asyncio.sleep(0.0)

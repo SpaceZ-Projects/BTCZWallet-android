@@ -26,7 +26,7 @@ class Menu(OptionContainer):
             content=self.receive_page,
             icon=f"{script_path}/images/receive.png"
         )
-        self.send_page = Send(app, utils)
+        self.send_page = Send(app, main, script_path, utils, units)
         self.send_option = OptionItem(
             text="Send",
             content=self.send_page,
@@ -49,26 +49,51 @@ class Menu(OptionContainer):
         self.wallet_storage = WalletStorage(self.app)
         self.txs_storage = TxsStorage(self.app)
 
+        self.app.proxy._back_callback = self.on_back_pressed
+        self.app.proxy._config_changed_callback = self.on_config_changed
+
         self.server_status = None
 
-        self.app.add_background_task(self.check_network)
+        asyncio.create_task(self.check_network())
 
 
-    async def check_network(self, widget):
+    def on_back_pressed(self):
+        def on_result(widget, result):
+            if result is True:
+                self.app.proxy.Exit()
+        current_tab = self.current_tab.text
+        if current_tab == "Home":
+            self.main.question_dialog(
+                title="Exit app",
+                message="Are you sure you want exit the app",
+                on_result=on_result
+            )
+        else:
+            self.current_tab = self.home_option
+        return True
+
+
+    async def check_network(self):
+        async def on_result(widget, result):
+            if result is None:
+                await asyncio.sleep(30)
+                asyncio.create_task(self.check_network())
+
         if await self.utils.is_tor_alive():
-            self.app.add_background_task(self.check_addresses)
+            asyncio.create_task(self.check_addresses())
         else:
             await asyncio.sleep(1)
             self.main.error_dialog(
                 title="Tor Network Error",
-                message="Failed to connect to the Tor network, ensure Tor is running and accessible"
+                message="Failed to connect to the Tor network, ensure Tor is running and accessible",
+                on_result=on_result
             )
 
-    async def check_addresses(self, widget):
+    async def check_addresses(self):
         async def on_result(widget, result):
             if result is None:
                 await asyncio.sleep(1)
-                self.app.add_background_task(self.check_addresses)
+                asyncio.create_task(self.check_addresses())
 
         wallet = self.wallet_storage.get_addresses()
         if not wallet:
@@ -86,17 +111,18 @@ class Menu(OptionContainer):
             shielded = result.get('shielded')
             balance = 0.00000000
             self.wallet_storage.insert_addresses(transparent, shielded, balance, balance)
+            self.receive_page.show_qr("transparent")
             
         self.run_tasks()
 
 
     def run_tasks(self):
-        self.app.add_background_task(self.update_server_status)
-        self.app.add_background_task(self.update_balances)
-        self.app.add_background_task(self.update_transactions)
+        asyncio.create_task(self.update_server_status())
+        asyncio.create_task(self.update_balances())
+        asyncio.create_task(self.update_transactions())
 
 
-    async def update_server_status(self, widget):
+    async def update_server_status(self):
         while True:
             device_auth = self.device_storage.get_auth()
             url = f'http://{device_auth[0]}/status'
@@ -105,25 +131,33 @@ class Menu(OptionContainer):
                 self.server_status = None
                 status = "Offline"
                 color = RED
-                ToastMessage("Server is offline, retrying in 30 seconds")
+                ToastMessage("Server is offline - retrying in 30 seconds")
             else:
-                self.server_status = True
-                status = "Online"
-                color = GREENYELLOW
-                height = result.get('height')
-                currency = result.get('currency')
-                price = result.get('price')
-                
-                self.main.current_blocks = height
-                self.main.currency = currency
-                self.main.price = price
+                if "version" not in result:
+                    self.main.error_dialog(
+                        title="Update Required",
+                        message=f"Server version is too old. Please update to at least 1.3.8"
+                    )
+                    self.server_status = None
+                    status = "Offline"
+                    color = RED
+                else:
+                    height = result.get('height')
+                    currency = result.get('currency')
+                    price = result.get('price')
+                    self.main.current_blocks = height
+                    self.main.currency = currency
+                    self.main.price = price
+                    self.server_status = True
+                    status = "Online"
+                    color = GREENYELLOW
 
             self.home_page.update_status(status, color)
 
             await asyncio.sleep(30)
 
 
-    async def update_balances(self, widget):
+    async def update_balances(self):
         while True:
             if not self.server_status:
                 await asyncio.sleep(1)
@@ -139,12 +173,12 @@ class Menu(OptionContainer):
             await asyncio.sleep(20)
 
 
-    async def update_transactions(self, widget):
+    async def update_transactions(self):
         while True:
             if not self.server_status:
                 await asyncio.sleep(1)
                 continue
-            transactions_data = self.txs_storage.get_transactions(option=True)
+            transactions_data = self.txs_storage.get_transactions(True)
             device_auth = self.device_storage.get_auth()
             url = f'http://{device_auth[0]}/transactions'
             result = await self.utils.make_request(device_auth[1], device_auth[2], url)
@@ -154,12 +188,14 @@ class Menu(OptionContainer):
                     category = data.get('category')
                     address = data.get('address')
                     txid = data.get('txid')
-                    amount = float(data.get('amount') or 0.0)
-                    blocks = int(data.get('blocks') or 0)
-                    txfee = float(data.get('fee') or 0.0)
-                    timestamp = int(data.get('timestamp') or 0)
+                    amount = data.get('amount')
+                    blocks = data.get('blocks')
+                    txfee = data.get('fee')
+                    timestamp = data.get('timestamp')
                     if txid not in transactions_data:
                         self.insert_transaction(tx_type, category, address, txid, amount, blocks, txfee, timestamp)
+                    else:
+                        self.update_blocks(txid, blocks)
 
             await asyncio.sleep(15)
 
@@ -168,3 +204,12 @@ class Menu(OptionContainer):
         self.txs_storage.insert_transaction(
             tx_type, category, address, txid, amount, blocks, txfee, timestamp
         )
+
+    def update_blocks(self, txid, blocks):
+        self.txs_storage.update_transaction(
+            txid, blocks
+        )
+
+    def on_config_changed(self, config):
+        if config.orientation == 2:
+            self.send_page.adjust_size()
