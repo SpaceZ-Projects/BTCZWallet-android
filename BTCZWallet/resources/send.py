@@ -453,6 +453,7 @@ class Send(Box):
                 title="Sent",
                 message=f"TxID : {txid}"
             )
+            self.destination_input.value = ""
             self.amount_input.value = ""
 
         self.switch_type.enabled = True
