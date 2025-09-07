@@ -32,7 +32,7 @@ class Home(Box):
         self.txs_storage = TxsStorage(self.app)
 
         self.transactions_data = {}
-        self.home_toggle = None
+        self.home_toggle = True
 
         x = self.utils.screen_resolution()
         if 1200 < x <= 1600:
