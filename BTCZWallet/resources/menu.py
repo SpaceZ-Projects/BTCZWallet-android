@@ -8,13 +8,14 @@ from ..framework import ToastMessage
 from .home import Home
 from .receive import Receive
 from .send import Send
+from .txs import Transactions
 from .storage import WalletStorage, DeviceStorage, TxsStorage
 
 
 class Menu(OptionContainer):
     def __init__(self, app:App, main:MainWindow, script_path, utils, units):
 
-        self.home_page = Home(app, main, utils, units)
+        self.home_page = Home(app, main, script_path, utils, units)
         self.home_option = OptionItem(
             text="Home",
             content=self.home_page,
@@ -32,11 +33,18 @@ class Menu(OptionContainer):
             content=self.send_page,
             icon=f"{script_path}/images/send.png"
         )
+        self.transactions_page = Transactions(app, main, script_path, utils, units)
+        self.transactions_option = OptionItem(
+            text="Txs",
+            content=self.transactions_page,
+            icon=f"{script_path}/images/txs.png"
+        )
         
         content = [
             self.home_option,
             self.receive_option,
-            self.send_option
+            self.send_option,
+            self.transactions_option
         ]
 
         super(Menu, self).__init__(content=content)
@@ -49,6 +57,7 @@ class Menu(OptionContainer):
         self.wallet_storage = WalletStorage(self.app)
         self.txs_storage = TxsStorage(self.app)
 
+        self.on_select = self.update_current_tab
         self.app.proxy._back_callback = self.on_back_pressed
         self.app.proxy._config_changed_callback = self.on_config_changed
 
@@ -56,6 +65,20 @@ class Menu(OptionContainer):
 
         asyncio.create_task(self.check_network())
 
+
+    async def update_current_tab(self, container):
+        await asyncio.sleep(0.1)
+        current_tab = self.current_tab.text
+        if current_tab == "Home":
+            self.transactions_page.transactions_toggle = None
+            self.home_page.home_toggle = True
+        elif current_tab == "Txs":
+            self.home_page.home_toggle = None
+            self.transactions_page.transactions_toggle = True
+        else:
+            self.home_page.home_toggle = None
+            self.transactions_page.transactions_toggle = None
+            
 
     def on_back_pressed(self):
         def on_result(widget, result):
@@ -145,12 +168,10 @@ class Menu(OptionContainer):
                     height = result.get('height')
                     currency = result.get('currency')
                     price = result.get('price')
-                    self.main.current_blocks = height
-                    self.main.currency = currency
-                    self.main.price = price
                     self.server_status = True
                     status = "Online"
                     color = GREENYELLOW
+                    self.wallet_storage.update_info(height, currency, price)
 
             self.home_page.update_status(status, color)
 
@@ -170,7 +191,7 @@ class Menu(OptionContainer):
                 shielded = result.get('shielded')
                 self.wallet_storage.update_balances(transparent, shielded)
 
-            await asyncio.sleep(20)
+            await asyncio.sleep(10)
 
 
     async def update_transactions(self):

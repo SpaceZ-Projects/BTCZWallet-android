@@ -1,17 +1,19 @@
 
+import asyncio
 from datetime import datetime
+import operator
 
-from toga import App, MainWindow, Box, Label
-from ..framework import ClickListener, ToastMessage
+from toga import App, MainWindow, Box, Label, ImageView, ScrollContainer
+from ..framework import ClickListener
 from toga.style.pack import Pack
 from toga.colors import rgb, GREENYELLOW, RED, WHITE
-from toga.constants import ROW, CENTER, BOLD, RIGHT
+from toga.constants import ROW, CENTER, BOLD, RIGHT, COLUMN
 
-from .storage import TxsStorage
+from .storage import TxsStorage, WalletStorage
 
 
-class Transaction(Box):
-    def __init__(self, app:App, main:MainWindow, utils, units, data):
+class Txid(Box):
+    def __init__(self, app:App, main:MainWindow, script_path, utils, units, data):
         super().__init__(
             style=Pack(
                 direction=ROW,
@@ -24,14 +26,18 @@ class Transaction(Box):
 
         self.app = app
         self.main = main
+        self.script_path = script_path
         self.units = units
         self.utils = utils
 
         self.txs_storage = TxsStorage(self.app)
+        self.wallet_storage = WalletStorage(self.app)
         
+        tx_type = data[0]
         category = data[1]
         self.txid = data[3]
         amount = data[4]
+        blocks = data[5]
         timestamp = data[7]
 
         x = self.utils.screen_resolution()
@@ -55,6 +61,27 @@ class Transaction(Box):
             text = "Send"
             color = RED
         formatted_time = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d\n%H:%M:%S")
+
+        confirmations = 0
+        height = self.wallet_storage.get_info("height")
+        if blocks > 0:
+            if tx_type == "shielded":
+                confirmations = height[0] - blocks
+            else:
+                confirmations = (height[0] - blocks) + 1
+        if confirmations <= 6:
+            icon = f"{self.script_path}/images/{confirmations}.png"
+        else:
+            icon = f"{self.script_path}/images/6.png"
+
+        self.confirmations_icon = ImageView(
+            image=icon,
+            style=Pack(
+                background_color=rgb(20,20,20),
+                height = 40,
+                padding=(10,0,0,5)
+            )
+        )
 
         self.category_label = Label(
             text=text,
@@ -97,6 +124,7 @@ class Transaction(Box):
         self._impl.native.setOnClickListener(ClickListener(self.show_tx_info))
 
         self.add(
+            self.confirmations_icon,
             self.category_label,
             self.amount_label,
             self.time_label
@@ -104,6 +132,7 @@ class Transaction(Box):
 
 
     def show_tx_info(self, view):
+        height = self.wallet_storage.get_info("height")
         transaction = self.txs_storage.get_transaction(self.txid)
         tx_type, category, address, txid, amount, blocks, txfee, timestamp = transaction
         if category == "receive":
@@ -112,11 +141,10 @@ class Transaction(Box):
             text = "Send"
         confirmations = 0
         if blocks > 0:
-            try:
-                confirmations = (self.main.current_blocks - blocks) + 1
-            except Exception:
-                ToastMessage("Failed to load transaction")
-                return
+            if tx_type == "shielded":
+                confirmations = height[0] - blocks
+            else:
+                confirmations = (height[0] - blocks) + 1
         message = (
             f"Type : {tx_type}\n"
             f"Category : {text}\n"
@@ -131,3 +159,136 @@ class Transaction(Box):
             title="Transaction Info",
             message=message
         )
+
+
+
+class Transactions(ScrollContainer):
+    def __init__(self, app:App, main:MainWindow, script_path, utils, units):
+        super().__init__()
+
+        self.vertical=True
+        self.horizontal=False
+        self.on_scroll = self._handle_on_scroll
+
+        self.app = app
+        self.main = main
+        self.script_path = script_path
+        self.utils = utils
+        self.units = units
+
+        self.txs_storage = TxsStorage(self.app)
+        self.wallet_storage = WalletStorage(self.app)
+
+        self.transactions_data = {}
+        self.no_more_transactions = None
+        self.scroll_toggle = None
+        self.transactions_toggle = None
+
+        self.transactions_count = 20
+        self.transactions_from = 0
+
+        self.transactions_box = Box(
+            style=Pack(
+                direction = COLUMN,
+                background_color = rgb(40,43,48),
+                flex = 1,
+                alignment=CENTER
+            )
+        )
+
+        self.content = self.transactions_box
+
+        asyncio.create_task(self.load_transactions())
+
+
+    def get_transactions(self, limit, offset):
+        transactions_list = self.txs_storage.get_transactions()
+        if not transactions_list:
+            return []
+        sorted_transactions = sorted(
+            transactions_list,
+            key=operator.itemgetter(7),
+            reverse=True
+        )
+        transactions = sorted_transactions[offset:offset + limit]
+        return transactions
+
+
+    async def load_transactions(self):
+        transactions = self.get_transactions(self.transactions_count, self.transactions_from)
+        transactions = sorted(
+            transactions,
+            key=operator.itemgetter(7),
+            reverse=True
+        )
+        for data in transactions:
+            txid = data[3]
+            transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
+            self.transactions_data[txid] = transaction_info
+            self.transactions_box.add(transaction_info)
+            await asyncio.sleep(0.0)
+
+        await asyncio.sleep(1)
+        asyncio.create_task(self.update_transactions())
+
+
+    async def update_transactions(self):
+        while True:
+            if not self.transactions_toggle:
+                await asyncio.sleep(1)
+                continue
+            height = self.wallet_storage.get_info("height")
+            transactions = self.txs_storage.get_transactions()
+            transactions = sorted(
+                transactions,
+                key=operator.itemgetter(7),
+                reverse=False
+            )
+            for data in transactions[20:]:
+                tx_type = data[0]
+                txid = data[3]
+                blocks = data[5]
+                if txid not in self.transactions_data:
+                    transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
+                    self.transactions_data[txid] = transaction_info
+                    self.transactions_box.insert(0, transaction_info)
+                    await asyncio.sleep(0.0)
+                else:
+                    confirmations = 0
+                    existing_tx = self.transactions_data[txid]
+                    if blocks > 0:
+                        if tx_type == "shielded":
+                            confirmations = height[0] - blocks
+                        else:
+                            confirmations = (height[0] - blocks) + 1
+                    if confirmations <= 6:
+                        icon = f"{self.script_path}/images/{confirmations}.png"
+                    else:
+                        icon = f"{self.script_path}/images/6.png"
+                    existing_tx.confirmations_icon.image = icon
+
+            
+            await asyncio.sleep(5)
+
+
+    def _handle_on_scroll(self, scroll):
+        if self.no_more_transactions or self.scroll_toggle:
+                return
+        if self.vertical_position == self.max_vertical_position:
+            asyncio.create_task(self.get_transactions_archive())
+
+
+    async def get_transactions_archive(self):
+        self.scroll_toggle = True
+        self.transactions_from += 20
+        transactions = self.get_transactions(self.transactions_count, self.transactions_from)
+        if not transactions:
+            self.no_more_transactions = True
+            return
+        for data in transactions:
+            txid = data[3]
+            transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
+            self.transactions_data[txid] = transaction_info
+            self.transactions_box.add(transaction_info)
+            await asyncio.sleep(0.0)
+        self.scroll_toggle = None
