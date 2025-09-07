@@ -30,9 +30,6 @@ class BitcoinZGUI(MainWindow):
         self.tor_window = None
         self.tbalance = None
         self.zbalance = None
-        self.current_blocks = None
-        self.currency = None
-        self.price = None
 
         x = self.utils.screen_resolution()
         if 1200 < x <= 1600:

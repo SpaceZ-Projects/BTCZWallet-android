@@ -125,6 +125,22 @@ class WalletStorage:
         conn.commit()
         conn.close()
 
+    
+    def create_server_info_table(self):
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS server_info (
+                height INTEGER,
+                currency TEXT,
+                price REAL
+            )
+            '''
+        )
+        conn.commit()
+        conn.close()
+
 
     def insert_addresses(self, taddress, zaddress, tbalance, zbalance):
         self.create_addresses_table()
@@ -139,6 +155,36 @@ class WalletStorage:
         )
         conn.commit()
         conn.close()
+
+
+    def insert_info(self, height, currency, price):
+        self.create_server_info_table()
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            INSERT INTO server_info (height, currency, price)
+            VALUES (?, ?, ?)
+            ''', 
+            (height, currency, price)
+        )
+        conn.commit()
+        conn.close()
+
+
+    def get_info(self, value = None):
+        try:
+            conn = sqlite3.connect(self.data)
+            cursor = conn.cursor()
+            if value:
+                cursor.execute(f'SELECT {value} FROM server_info')
+            else:
+                cursor.execute(f'SELECT * FROM server_info')
+            data = cursor.fetchone()
+            conn.close()
+            return data
+        except sqlite3.OperationalError:
+            return None
 
     
     def get_addresses(self, address_type = None, balance = None):
@@ -174,6 +220,19 @@ class WalletStorage:
             UPDATE addresses
             SET tbalance = ?, zbalance = ?
             ''', (tbalance, zbalance)
+        )
+        conn.commit()
+        conn.close()
+
+
+    def update_info(self, height, currency, price):
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            UPDATE server_info
+            SET height = ?, currency = ?, price = ?
+            ''', (height, currency, price)
         )
         conn.commit()
         conn.close()

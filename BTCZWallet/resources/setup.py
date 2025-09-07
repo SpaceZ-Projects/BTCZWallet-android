@@ -8,7 +8,7 @@ from toga.constants import COLUMN, ROW, CENTER, BOLD
 from toga.colors import rgb, WHITE, BLACK, GREENYELLOW, GRAY
 
 from .menu import Menu
-from .storage import DeviceStorage
+from .storage import DeviceStorage, WalletStorage
 
 
 class ServerSetup(ScrollContainer):
@@ -27,6 +27,7 @@ class ServerSetup(ScrollContainer):
         self.units = units
 
         self.device_storage = DeviceStorage(self.app)
+        self.wallet_storage = WalletStorage(self.app)
 
         x = self.utils.screen_resolution()
         if 1200 < x <= 1600:
@@ -318,5 +319,15 @@ class ServerSetup(ScrollContainer):
             self.confirm_button.enabled = True
             ToastMessage("Failed to connect to the server")
             return
+        if "version" not in result:
+            self.main.error_dialog(
+                title="Update Required",
+                message=f"Server version is too old. Please update to at least 1.3.8"
+            )
+            return
+        height = result.get('height')
+        currency = result.get('currency')
+        price = result.get('price')
+        self.wallet_storage.insert_info(height, currency, price)
         self.device_storage.insert_auth(hostname, auth, secret)
         self.app.main_window.content = Menu(self.app, self.main, self.script_path, self.utils, self.units)
