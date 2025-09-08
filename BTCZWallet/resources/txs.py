@@ -4,7 +4,7 @@ from datetime import datetime
 import operator
 
 from toga import App, MainWindow, Box, Label, ImageView, ScrollContainer
-from ..framework import ClickListener
+from ..framework import ClickListener, ToastMessage
 from toga.style.pack import Pack
 from toga.colors import rgb, GREENYELLOW, RED, WHITE
 from toga.constants import ROW, CENTER, BOLD, RIGHT, COLUMN
@@ -32,6 +32,8 @@ class Txid(Box):
 
         self.txs_storage = TxsStorage(self.app)
         self.wallet_storage = WalletStorage(self.app)
+
+        self.has_confirmed = None
         
         tx_type = data[0]
         category = data[1]
@@ -44,15 +46,19 @@ class Txid(Box):
         if 1200 < x <= 1600:
             text_size = 15
             time_size = 12
+            conf_height = 40
         elif 800 < x <= 1200:
             text_size = 12
             time_size = 9
+            conf_height = 40
         elif 480 < x <= 800:
             text_size = 10
             time_size = 7
+            conf_height = 35
         else:
             text_size = 18
             time_size = 15
+            conf_height = 45
         
         if category == "receive":
             text = "Receive"
@@ -72,14 +78,16 @@ class Txid(Box):
         if confirmations <= 6:
             icon = f"{self.script_path}/images/{confirmations}.png"
         else:
-            icon = f"{self.script_path}/images/6.png"
+            self.has_confirmed = True
+            icon = f"{self.script_path}/images/confirmed.png"
 
         self.confirmations_icon = ImageView(
             image=icon,
             style=Pack(
                 background_color=rgb(20,20,20),
-                height = 40,
-                padding=(10,0,0,5)
+                height = conf_height,
+                padding=(10,0,0,5),
+                alignment=CENTER
             )
         )
 
@@ -183,6 +191,7 @@ class Transactions(ScrollContainer):
         self.no_more_transactions = None
         self.scroll_toggle = None
         self.transactions_toggle = None
+        self.is_loading = None
 
         self.transactions_count = 20
         self.transactions_from = 0
@@ -234,7 +243,7 @@ class Transactions(ScrollContainer):
 
     async def update_transactions(self):
         while True:
-            if not self.transactions_toggle:
+            if not self.transactions_toggle or self.is_loading:
                 await asyncio.sleep(1)
                 continue
             height = self.wallet_storage.get_info("height")
@@ -242,9 +251,9 @@ class Transactions(ScrollContainer):
             transactions = sorted(
                 transactions,
                 key=operator.itemgetter(7),
-                reverse=False
+                reverse=True
             )
-            for data in transactions[20:]:
+            for data in transactions[:20]:
                 tx_type = data[0]
                 txid = data[3]
                 blocks = data[5]
@@ -263,22 +272,49 @@ class Transactions(ScrollContainer):
                             confirmations = (height[0] - blocks) + 1
                     if confirmations <= 6:
                         icon = f"{self.script_path}/images/{confirmations}.png"
+                        existing_tx.confirmations_icon.image = icon
                     else:
-                        icon = f"{self.script_path}/images/6.png"
-                    existing_tx.confirmations_icon.image = icon
-
-            
+                        if not existing_tx.has_confirmed:
+                            icon = f"{self.script_path}/images/confirmed.png"
+                            existing_tx.confirmations_icon.image = icon
+                            existing_tx.has_confirmed = True
+                    
             await asyncio.sleep(5)
+
+
+    async def reload_transactions(self):
+        self.is_loading = True
+        self.transactions_from = 0
+        self.no_more_transactions = None
+        self.scroll_toggle = None
+        self.transactions_data.clear()
+        self.transactions_box.clear()
+        transactions = self.get_transactions(self.transactions_count, self.transactions_from)
+        transactions = sorted(
+            transactions,
+            key=operator.itemgetter(7),
+            reverse=True
+        )
+        for data in transactions:
+            txid = data[3]
+            transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
+            self.transactions_data[txid] = transaction_info
+            self.transactions_box.add(transaction_info)
+            await asyncio.sleep(0.0)
+        self.vertical_position = 0
+        self.is_loading = None
 
 
     def _handle_on_scroll(self, scroll):
         if self.no_more_transactions or self.scroll_toggle:
-                return
+            return
         if self.vertical_position == self.max_vertical_position:
             asyncio.create_task(self.get_transactions_archive())
 
 
     async def get_transactions_archive(self):
+        if self.scroll_toggle:
+            return
         self.scroll_toggle = True
         self.transactions_from += 20
         transactions = self.get_transactions(self.transactions_count, self.transactions_from)

@@ -360,9 +360,9 @@ class Home(Box):
             transactions = sorted(
                 transactions,
                 key=operator.itemgetter(7),
-                reverse=False
+                reverse=True
             )
-            for data in transactions[20:]:
+            for data in transactions[:20]:
                 tx_type = data[0]
                 txid = data[3]
                 blocks = data[5]
@@ -384,9 +384,12 @@ class Home(Box):
                             confirmations = (height[0] - blocks) + 1
                     if confirmations <= 6:
                         icon = f"{self.script_path}/images/{confirmations}.png"
+                        existing_tx.confirmations_icon.image = icon
                     else:
-                        icon = f"{self.script_path}/images/6.png"
-                    existing_tx.confirmations_icon.image = icon
+                        if not existing_tx.has_confirmed:
+                            icon = f"{self.script_path}/images/confirmed.png"
+                            existing_tx.confirmations_icon.image = icon
+                            existing_tx.has_confirmed = True
 
             
             await asyncio.sleep(5)

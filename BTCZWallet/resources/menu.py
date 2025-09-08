@@ -72,12 +72,17 @@ class Menu(OptionContainer):
         if current_tab == "Home":
             self.transactions_page.transactions_toggle = None
             self.home_page.home_toggle = True
+            self.reload_transactions()
         elif current_tab == "Txs":
             self.home_page.home_toggle = None
             self.transactions_page.transactions_toggle = True
         else:
             self.home_page.home_toggle = None
             self.transactions_page.transactions_toggle = None
+            self.reload_transactions()
+
+    def reload_transactions(self):
+        asyncio.create_task(self.transactions_page.reload_transactions())
             
 
     def on_back_pressed(self):
