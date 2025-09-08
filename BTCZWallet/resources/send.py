@@ -1,7 +1,10 @@
 
 import asyncio
 
-from toga import App, MainWindow, Box, Label, ScrollContainer, Switch, Button, TextInput, ImageView, NumberInput
+from toga import (
+    App, MainWindow, Box, Label, ScrollContainer, Switch,
+    Button, TextInput, ImageView, NumberInput, Slider
+)
 from ..framework import ClickListener, ToastMessage, InputType, FocusChangeListener
 from toga.style.pack import Pack
 from toga.constants import COLUMN, ROW, CENTER, BOLD
@@ -171,6 +174,38 @@ class Send(Box):
             )
         )
 
+        self.amount_slider = Slider(
+            min=0,
+            max=100,
+            value=0,
+            tick_count=5,
+            style=Pack(
+                flex = 3.5
+            ),
+            on_change=self.on_slider_change
+        )
+
+        self.slider_percentage = Label(
+            text="%0",
+            style=Pack(
+                color = GRAY,
+                background_color = rgb(66,69,73),
+                font_size=text_size,
+                font_weight=BOLD,
+                text_align=CENTER,
+                flex= 1
+            )
+        )
+
+        self.amount_slider_box = Box(
+            style=Pack(
+                direction = ROW,
+                background_color = rgb(66,69,73),
+                height = 45,
+                alignment=CENTER
+            )
+        )
+
         self.fee_label = Label(
             text="Fee :",
             style=Pack(
@@ -268,6 +303,7 @@ class Send(Box):
         self.options_box.add(
             self.destination_box,
             self.amount_box,
+            self.amount_slider_box,
             self.fee_box
         )
         self.destination_box.add(
@@ -279,6 +315,10 @@ class Send(Box):
             self.amount_input,
             self.check_amount_label
         )
+        self.amount_slider_box.add(
+            self.amount_slider,
+            self.slider_percentage
+        )
         self.fee_box.add(
             self.fee_label,
             self.fee_input,
@@ -289,6 +329,7 @@ class Send(Box):
         )
 
         asyncio.create_task(self.update_balance())
+
 
 
     async def update_balance(self):
@@ -337,6 +378,9 @@ class Send(Box):
                 self.send_button.style.color = WHITE
                 self.send_button.style.background_color = GRAY
                 self.send_button.enabled = False
+                
+        self.amount_input.value = ""
+        self.amount_slider.value = 0
 
     
     def scan_qr_address(self, view):
@@ -423,13 +467,7 @@ class Send(Box):
                     message=f"Total {total_amount} exceeds your shielded balance ({self.main.zbalance})."
                 )
                 return
-        self.switch_type.enabled = False
-        self.scan_address._impl.native.setOnClickListener(None)
-        self.send_button.enabled = False
-        self.send_button.text = "Processing..."
-        self.destination_input.enabled = False
-        self.amount_input.enabled = False
-        self.fee_input.enabled = False
+        self.disable_send()
         device_auth = self.device_storage.get_auth()
         url = f'http://{device_auth[0]}/cashout'
         params = {
@@ -455,16 +493,49 @@ class Send(Box):
             )
             self.destination_input.value = ""
             self.amount_input.value = ""
+            self.amount_slider.value = 0
 
+        self.enable_send()
+
+
+    def disable_send(self):
+        self.switch_type.enabled = False
+        self.scan_address._impl.native.setOnClickListener(None)
+        self.send_button.enabled = False
+        self.send_button.text = "Processing..."
+        self.destination_input.enabled = False
+        self.amount_input.enabled = False
+        self.amount_slider.enabled = False
+        self.fee_input.enabled = False
+
+
+    def enable_send(self):
         self.switch_type.enabled = True
         self.scan_address._impl.native.setOnClickListener(ClickListener(self.scan_qr_address))
         self.send_button.enabled = True
         self.send_button.text = "Cashout"
         self.destination_input.enabled = True
         self.amount_input.enabled = True
+        self.amount_slider.enabled = True
         self.fee_input.enabled = True
+
             
-                 
+    def on_slider_change(self, slider):
+        percent = int(slider.value)
+        self.slider_percentage.text = f"%{percent}"
+        if self.switch_type.value is False:
+            balance = self.main.tbalance
+        else:
+            balance = self.main.zbalance
+        amount = (percent / 100) * balance
+        if percent == 100:
+            amount -= 0.00001
+        elif percent == 0:
+            self.amount_input.value = ""
+            return
+        formatted = self.units.format_balance(amount)
+        self.amount_input._impl.native.setText(formatted)
+
 
     def on_gain_focus(self, input):
         self.adjust_size()
