@@ -1,7 +1,7 @@
 
 import asyncio
 
-from toga import App, MainWindow, OptionContainer, OptionItem
+from toga import App, MainWindow, OptionContainer, OptionItem, Box
 from toga.colors import RED, GREENYELLOW
 from ..framework import ToastMessage
 
@@ -9,6 +9,7 @@ from .home import Home
 from .receive import Receive
 from .send import Send
 from .txs import Transactions
+from .mining import Mining
 from .storage import WalletStorage, DeviceStorage, TxsStorage
 
 
@@ -39,19 +40,28 @@ class Menu(OptionContainer):
             content=self.transactions_page,
             icon=f"{script_path}/images/txs.png"
         )
+        self.switch_options = Box()
+        self.switch_options = OptionItem(
+            text="More",
+            content=self.switch_options,
+            icon=f"{script_path}/images/more.png"
+        )
         
         content = [
             self.home_option,
             self.receive_option,
             self.send_option,
-            self.transactions_option
+            self.transactions_option,
+            self.switch_options
         ]
 
         super(Menu, self).__init__(content=content)
 
         self.app = app
         self.main = main
+        self.script_path = script_path
         self.utils = utils
+        self.units = units
 
         self.device_storage = DeviceStorage(self.app)
         self.wallet_storage = WalletStorage(self.app)
@@ -62,6 +72,15 @@ class Menu(OptionContainer):
         self.app.proxy._config_changed_callback = self.on_config_changed
 
         self.server_status = None
+        self.switch_toggle = None
+        self.more_toggle = None
+
+        self.mining_page = Mining(self.app, self.main, self.script_path, self.utils, self.units)
+        self.mining_option = OptionItem(
+            text="Mining",
+            content=self.mining_page,
+            icon=f"{script_path}/images/mining.png"
+        )
 
         asyncio.create_task(self.check_network())
 
@@ -70,34 +89,86 @@ class Menu(OptionContainer):
         await asyncio.sleep(0.1)
         current_tab = self.current_tab.text
         if current_tab == "Home":
-            self.transactions_page.transactions_toggle = None
             self.home_page.home_toggle = True
             self.reload_transactions()
         elif current_tab == "Txs":
             self.home_page.home_toggle = None
             self.transactions_page.transactions_toggle = True
+        elif current_tab == "More":
+            self.more_toggle = True
+            asyncio.create_task(self._on_more_click())
+            self.reload_transactions()
+        elif current_tab == "Back":
+            self.more_toggle = None
+            asyncio.create_task(self._on_back_click())
+        elif current_tab == "Mining":
+            self.mining_page.run_mining_task()
         else:
             self.home_page.home_toggle = None
-            self.transactions_page.transactions_toggle = None
             self.reload_transactions()
 
+    async def _on_more_click(self):
+        self.switch_toggle = True
+        self._impl.native.setClickable(False)
+        self._impl.native.setEnabled(False)
+        self.content.remove(self.home_option)
+        self.current_tab = self.send_option
+        self.content.remove(self.receive_option)
+        self.current_tab = self.transactions_option
+        self.content.remove(self.send_option)
+        self.content.append(self.mining_option)
+        self.current_tab = self.mining_option
+        self.content.remove(self.transactions_option)
+        self.switch_options.icon = f"{self.script_path}/images/back.png"
+        self.switch_options.text = "Back"
+        self.current_tab = self.mining_option
+        self._impl.native.setClickable(False)
+        self._impl.native.setEnabled(False)
+        self.switch_toggle = None
+
+    async def _on_back_click(self):
+        self.switch_toggle = True
+        self._impl.native.setClickable(False)
+        self._impl.native.setEnabled(False)
+        self.content.remove(self.mining_option)
+        self.content.append(self.home_option)
+        self.current_tab = self.home_option
+        self.content.remove(self.switch_options)
+        self.content.append(self.receive_option)
+        self.content.append(self.send_option)
+        self.content.append(self.transactions_option)
+        self.switch_options.icon = f"{self.script_path}/images/more.png"
+        self.switch_options.text = "More"
+        self.content.append(self.switch_options)
+        self._impl.native.setClickable(True)
+        self._impl.native.setEnabled(True)
+        self.switch_toggle = None
+        
+
     def reload_transactions(self):
-        asyncio.create_task(self.transactions_page.reload_transactions())
+        if self.transactions_page.transactions_toggle:
+            self.transactions_page.transactions_toggle = None
+            asyncio.create_task(self.transactions_page.reload_transactions())
             
 
     def on_back_pressed(self):
         def on_result(widget, result):
             if result is True:
                 self.app.proxy.Exit()
-        current_tab = self.current_tab.text
-        if current_tab == "Home":
-            self.main.question_dialog(
-                title="Exit app",
-                message="Are you sure you want exit the app",
-                on_result=on_result
-            )
-        else:
-            self.current_tab = self.home_option
+
+        if not self.switch_toggle:
+            current_tab = self.current_tab.text
+            if current_tab == "Home":
+                self.main.question_dialog(
+                    title="Exit app",
+                    message="Are you sure you want exit the app",
+                    on_result=on_result
+                )
+            elif self.more_toggle:
+                self.more_toggle = None
+                self.current_tab = self.switch_options
+            else:
+                self.current_tab = self.home_option
         return True
 
 
