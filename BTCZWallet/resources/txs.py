@@ -4,7 +4,7 @@ from datetime import datetime
 import operator
 
 from toga import App, MainWindow, Box, Label, ImageView, ScrollContainer
-from ..framework import ClickListener, ToastMessage
+from ..framework import ClickListener
 from toga.style.pack import Pack
 from toga.colors import rgb, GREENYELLOW, RED, WHITE
 from toga.constants import ROW, CENTER, BOLD, RIGHT, COLUMN
@@ -75,8 +75,10 @@ class Txid(Box):
                 confirmations = height[0] - blocks
             else:
                 confirmations = (height[0] - blocks) + 1
-        if confirmations <= 6:
+        if 0 <= confirmations <= 6:
             icon = f"{self.script_path}/images/{confirmations}.png"
+        elif confirmations < 0:
+            icon = f"{self.script_path}/images/0.png"
         else:
             self.has_confirmed = True
             icon = f"{self.script_path}/images/confirmed.png"
@@ -270,8 +272,11 @@ class Transactions(ScrollContainer):
                             confirmations = height[0] - blocks
                         else:
                             confirmations = (height[0] - blocks) + 1
-                    if confirmations <= 6:
+                    if 0 <= confirmations <= 6:
                         icon = f"{self.script_path}/images/{confirmations}.png"
+                        existing_tx.confirmations_icon.image = icon
+                    elif confirmations < 0:
+                        icon = f"{self.script_path}/images/0.png"
                         existing_tx.confirmations_icon.image = icon
                     else:
                         if not existing_tx.has_confirmed:
