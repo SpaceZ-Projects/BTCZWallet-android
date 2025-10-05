@@ -1,5 +1,6 @@
 
 import asyncio
+import json
 
 from toga import App, MainWindow, OptionContainer, OptionItem, Box
 from toga.colors import RED, GREENYELLOW
@@ -9,8 +10,9 @@ from .home import Home
 from .receive import Receive
 from .send import Send
 from .txs import Transactions
+from .book import AddressBook
 from .mining import Mining
-from .storage import WalletStorage, DeviceStorage, TxsStorage
+from .storage import WalletStorage, DeviceStorage, TxsStorage, AddressesStorage
 
 
 class Menu(OptionContainer):
@@ -66,6 +68,7 @@ class Menu(OptionContainer):
         self.device_storage = DeviceStorage(self.app)
         self.wallet_storage = WalletStorage(self.app)
         self.txs_storage = TxsStorage(self.app)
+        self.addresses_storage = AddressesStorage(self.app)
 
         self.on_select = self.update_current_tab
         self.app.proxy._back_callback = self.on_back_pressed
@@ -75,6 +78,13 @@ class Menu(OptionContainer):
         self.switch_toggle = None
         self.more_toggle = None
 
+        self.book_page = AddressBook(self.app, self.main, self.script_path, self.utils, self.units)
+        self.book_option = OptionItem(
+            text="Book",
+            content=self.book_page,
+            icon=f"{script_path}/images/book.png"
+        )
+
         self.mining_page = Mining(self.app, self.main, self.script_path, self.utils, self.units)
         self.mining_option = OptionItem(
             text="Mining",
@@ -82,7 +92,7 @@ class Menu(OptionContainer):
             icon=f"{script_path}/images/mining.png"
         )
 
-        asyncio.create_task(self.check_network())
+        self.app.loop.create_task(self.check_network())
 
 
     async def update_current_tab(self, container):
@@ -96,11 +106,13 @@ class Menu(OptionContainer):
             self.transactions_page.transactions_toggle = True
         elif current_tab == "More":
             self.more_toggle = True
-            asyncio.create_task(self._on_more_click())
+            self.app.loop.create_task(self._on_more_click())
             self.reload_transactions()
         elif current_tab == "Back":
             self.more_toggle = None
-            asyncio.create_task(self._on_back_click())
+            self.app.loop.create_task(self._on_back_click())
+        elif current_tab == "Book":
+            self.book_page.run_book_task()
         elif current_tab == "Mining":
             self.mining_page.run_mining_task()
         else:
@@ -116,14 +128,15 @@ class Menu(OptionContainer):
         self.content.remove(self.receive_option)
         self.current_tab = self.transactions_option
         self.content.remove(self.send_option)
-        self.content.append(self.mining_option)
-        self.current_tab = self.mining_option
+        self.content.append(self.book_option)
+        self.current_tab = self.book_option
         self.content.remove(self.transactions_option)
+        self.content.append(self.mining_option)
         self.switch_options.icon = f"{self.script_path}/images/back.png"
         self.switch_options.text = "Back"
-        self.current_tab = self.mining_option
-        self._impl.native.setClickable(False)
-        self._impl.native.setEnabled(False)
+        self.current_tab = self.book_option
+        self._impl.native.setClickable(True)
+        self._impl.native.setEnabled(True)
         self.switch_toggle = None
 
     async def _on_back_click(self):
@@ -131,6 +144,7 @@ class Menu(OptionContainer):
         self._impl.native.setClickable(False)
         self._impl.native.setEnabled(False)
         self.content.remove(self.mining_option)
+        self.content.remove(self.book_option)
         self.content.append(self.home_option)
         self.current_tab = self.home_option
         self.content.remove(self.switch_options)
@@ -148,7 +162,7 @@ class Menu(OptionContainer):
     def reload_transactions(self):
         if self.transactions_page.transactions_toggle:
             self.transactions_page.transactions_toggle = None
-            asyncio.create_task(self.transactions_page.reload_transactions())
+            self.app.loop.create_task(self.transactions_page.reload_transactions())
             
 
     def on_back_pressed(self):
@@ -176,10 +190,10 @@ class Menu(OptionContainer):
         async def on_result(widget, result):
             if result is None:
                 await asyncio.sleep(30)
-                asyncio.create_task(self.check_network())
+                self.app.loop.create_task(self.check_network())
 
         if await self.utils.is_tor_alive():
-            asyncio.create_task(self.check_addresses())
+            self.app.loop.create_task(self.check_addresses())
         else:
             await asyncio.sleep(1)
             self.main.error_dialog(
@@ -192,7 +206,7 @@ class Menu(OptionContainer):
         async def on_result(widget, result):
             if result is None:
                 await asyncio.sleep(1)
-                asyncio.create_task(self.check_addresses())
+                self.app.loop.create_task(self.check_addresses())
 
         wallet = self.wallet_storage.get_addresses()
         if not wallet:
@@ -206,6 +220,9 @@ class Menu(OptionContainer):
                     on_result=on_result
                 )
                 return
+            decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+            result = json.loads(decrypted)
+
             transparent = result.get('transparent')
             shielded = result.get('shielded')
             balance = 0.00000000
@@ -216,9 +233,10 @@ class Menu(OptionContainer):
 
 
     def run_tasks(self):
-        asyncio.create_task(self.update_server_status())
-        asyncio.create_task(self.update_balances())
-        asyncio.create_task(self.update_transactions())
+        self.app.loop.create_task(self.update_server_status())
+        self.app.loop.create_task(self.update_balances())
+        self.app.loop.create_task(self.update_transactions())
+        self.app.loop.create_task(self.update_address_book())
 
 
     async def update_server_status(self):
@@ -232,22 +250,46 @@ class Menu(OptionContainer):
                 color = RED
                 ToastMessage("Server is offline - retrying in 30 seconds")
             else:
-                if "version" not in result:
+                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+                result = json.loads(decrypted)
+                version = result.get('version')
+                min_version = (1, 4, 6)
+                if not version:
                     self.main.error_dialog(
                         title="Update Required",
-                        message=f"Server version is too old. Please update to at least 1.3.8"
+                        message=f"Server version is too old. Please update to at least 1.4.6"
                     )
                     self.server_status = None
                     status = "Offline"
                     color = RED
                 else:
-                    height = result.get('height')
-                    currency = result.get('currency')
-                    price = result.get('price')
-                    self.server_status = True
-                    status = "Online"
-                    color = GREENYELLOW
-                    self.wallet_storage.update_info(height, currency, price)
+                    try:
+                        version_tuple = tuple(int(x) for x in version.split("."))
+                    except ValueError:
+                        self.main.error_dialog(
+                            title="Update Required",
+                            message=f"Invalid server version format: {version}"
+                        )
+                        self.server_status = None
+                        status = "Offline"
+                        color = RED
+                    else:
+                        if version_tuple < min_version:
+                            self.main.error_dialog(
+                                title="Update Required",
+                                message=f"Server version {version} is too old. Please update to at least 1.4.6"
+                            )
+                            self.server_status = None
+                            status = "Offline"
+                            color = RED
+                        else:
+                            height = result.get('height')
+                            currency = result.get('currency')
+                            price = result.get('price')
+                            self.server_status = True
+                            status = "Online"
+                            color = GREENYELLOW
+                            self.wallet_storage.update_info(height, currency, price)
 
             self.home_page.update_status(status, color)
 
@@ -262,7 +304,9 @@ class Menu(OptionContainer):
             device_auth = self.device_storage.get_auth()
             url = f'http://{device_auth[0]}/balances'
             result = await self.utils.make_request(device_auth[1], device_auth[2], url)
-            if result:
+            if result and "data" in result:
+                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+                result = json.loads(decrypted)
                 transparent = result.get('transparent')
                 shielded = result.get('shielded')
                 self.wallet_storage.update_balances(transparent, shielded)
@@ -279,7 +323,9 @@ class Menu(OptionContainer):
             device_auth = self.device_storage.get_auth()
             url = f'http://{device_auth[0]}/transactions'
             result = await self.utils.make_request(device_auth[1], device_auth[2], url)
-            if result:
+            if result and "data" in result:
+                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+                result = json.loads(decrypted)
                 for data in result:
                     tx_type = data.get('type')
                     category = data.get('category')
@@ -295,6 +341,37 @@ class Menu(OptionContainer):
                         self.update_blocks(txid, blocks)
 
             await asyncio.sleep(15)
+
+
+    async def update_address_book(self):
+        while True:
+            if not self.server_status:
+                await asyncio.sleep(1)
+                continue
+            server_addresses = []
+            device_auth = self.device_storage.get_auth()
+            url = f'http://{device_auth[0]}/book'
+            params = {"get": "address"}
+            result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
+            if result and "data" in result:
+                address_book = self.addresses_storage.get_address_book("address")
+                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+                result = json.loads(decrypted)
+                for data in result:
+                    name = data.get('name')
+                    address = data.get('address')
+                    server_addresses.append(address)
+                    if address not in address_book:
+                        self.addresses_storage.insert_book(name, address)
+
+                for address in address_book:
+                    if address not in server_addresses:
+                        self.addresses_storage.delete_address_book(address)
+
+                return
+
+            await asyncio.sleep(10)
+
 
     
     def insert_transaction(self, tx_type, category, address, txid, amount, blocks, txfee, timestamp):

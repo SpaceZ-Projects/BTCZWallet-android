@@ -6,6 +6,91 @@ from toga import App
 
 
 
+class AddressesStorage:
+    def __init__(self, app:App):
+        super().__init__()
+
+        self.app = app
+        if not os.path.exists(self.app.paths.data):
+            os.makedirs(self.app.paths.data)
+        self.data = os.path.join(self.app.paths.data, 'addresses.dat')
+
+
+    def create_address_book_table(self):
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS address_book (
+                name TEXT,
+                address TEXT
+            )
+            '''
+        )
+        conn.commit()
+        conn.close()
+
+
+    def insert_book(self, name, address):
+        self.create_address_book_table()
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            INSERT INTO address_book (name, address)
+            VALUES (?, ?)
+            ''', 
+            (name, address)
+        )
+        conn.commit()
+        conn.close()
+
+
+    def get_address_book(self, option=None, name = None):
+        try:
+            conn = sqlite3.connect(self.data)
+            cursor = conn.cursor()
+            if name:
+                cursor.execute(
+                    'SELECT address FROM address_book WHERE name = ?',
+                    (name,)
+                )
+                address = cursor.fetchone()
+                conn.close()
+                return address
+            
+            if option == "address":
+                cursor.execute('SELECT address FROM address_book')
+                addresses = [row[0] for row in cursor.fetchall()]
+            elif option == "name":
+                cursor.execute('SELECT name FROM address_book')
+                addresses = [row[0] for row in cursor.fetchall()]
+            else:
+                cursor.execute('SELECT * FROM address_book')
+                addresses = cursor.fetchall()
+            conn.close()
+            return addresses
+        except sqlite3.OperationalError:
+            return []
+        
+
+    def delete_address_book(self, address):
+        try:
+            conn = sqlite3.connect(self.data)
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                DELETE FROM address_book WHERE address = ?
+                ''', 
+                (address,)
+            )
+            conn.commit()
+            conn.close()
+        except sqlite3.OperationalError as e:
+            print(f"Error deleting item: {e}")
+
+
+
 class TxsStorage:
     def __init__(self, app:App):
         super().__init__()

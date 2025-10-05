@@ -13,7 +13,8 @@ from toga.style.pack import Pack
 from toga.constants import COLUMN, ROW, CENTER, BOLD
 from toga.colors import rgb, GRAY, YELLOW, WHITE, BLACK, RED, GREENYELLOW
 
-from .storage import DeviceStorage
+from .book import Address
+from .storage import DeviceStorage, AddressesStorage
 
 
 class CashOut(RelativeDialog):
@@ -180,6 +181,7 @@ class Send(Box):
         self.units = units
 
         self.device_storage = DeviceStorage(self.app)
+        self.addresses_storage = AddressesStorage(self.app)
 
         x = self.utils.screen_resolution()
         if 1200 < x <= 1600:
@@ -187,19 +189,19 @@ class Send(Box):
             switch_size = 17
             button_size = 18
             input_size = 18
-            icon_width = 37
+            icon_width = 35
         elif 800 < x <= 1200:
             self.text_size = 12
             switch_size = 14
             button_size = 15
             input_size = 15
-            icon_width = 37
+            icon_width = 30
         elif 480 < x <= 800:
             self.text_size = 10
             switch_size = 11
             button_size = 12
             input_size = 12
-            icon_width = 33
+            icon_width = 25
         else:
             self.text_size = 18
             switch_size = 19
@@ -247,7 +249,7 @@ class Send(Box):
             placeholder="Enter address",
             style=Pack(
                 color = WHITE,
-                background_color = rgb(40,43,48),
+                background_color = rgb(30,33,36),
                 font_size=input_size,
                 text_align=CENTER,
                 flex = 1,
@@ -257,12 +259,23 @@ class Send(Box):
             on_change=self.check_address
         )
 
+        self.address_book = ImageView(
+            image=f"{self.script_path}/images/book_w.png",
+            style=Pack(
+                background_color = rgb(40,43,48),
+                width=icon_width,
+                padding = (8,10,0,0)
+            )
+        )
+        self.address_book._impl.native.setClickable(True)
+        self.address_book._impl.native.setOnClickListener(ClickListener(self.show_address_book))
+
         self.scan_address = ImageView(
             image=f"{self.script_path}/images/qrscanner.png",
             style=Pack(
-                background_color = rgb(66,69,73),
+                background_color = rgb(40,43,48),
                 width=icon_width,
-                padding = (7,10,0,0)
+                padding = (8,10,0,0)
             )
         )
         self.scan_address._impl.native.setClickable(True)
@@ -271,7 +284,7 @@ class Send(Box):
         self.destination_box = Box(
             style=Pack(
                 direction = ROW,
-                background_color = rgb(66,69,73),
+                background_color = rgb(40,43,48),
                 height = 70,
                 alignment=CENTER
             )
@@ -281,7 +294,7 @@ class Send(Box):
             text="Amount :",
             style=Pack(
                 color=GRAY,
-                background_color=rgb(66,69,73),
+                background_color=rgb(40,43,48),
                 font_size=self.text_size,
                 font_weight=BOLD,
                 padding = (15,0,0,10)
@@ -291,7 +304,7 @@ class Send(Box):
         self.amount_input = NumberInput(
             style=Pack(
                 color = WHITE,
-                background_color = rgb(40,43,48),
+                background_color = rgb(30,33,36),
                 font_size=input_size,
                 text_align=CENTER,
                 flex = 1.5,
@@ -307,7 +320,7 @@ class Send(Box):
         self.check_amount_label = Label(
             text="",
             style=Pack(
-                background_color=rgb(66,69,73),
+                background_color=rgb(40,43,48),
                 font_size=self.text_size,
                 flex = 1,
                 padding = (10,0,0,0)
@@ -317,7 +330,7 @@ class Send(Box):
         self.amount_box = Box(
             style=Pack(
                 direction = ROW,
-                background_color = rgb(66,69,73),
+                background_color = rgb(40,43,48),
                 height = 70,
                 alignment=CENTER
             )
@@ -338,7 +351,7 @@ class Send(Box):
             text="%0",
             style=Pack(
                 color = GRAY,
-                background_color = rgb(66,69,73),
+                background_color = rgb(40,43,48),
                 font_size=self.text_size,
                 font_weight=BOLD,
                 text_align=CENTER,
@@ -349,7 +362,7 @@ class Send(Box):
         self.amount_slider_box = Box(
             style=Pack(
                 direction = ROW,
-                background_color = rgb(66,69,73),
+                background_color = rgb(40,43,48),
                 height = 45,
                 alignment=CENTER
             )
@@ -359,7 +372,7 @@ class Send(Box):
             text="Fee :",
             style=Pack(
                 color=GRAY,
-                background_color=rgb(66,69,73),
+                background_color=rgb(40,43,48),
                 font_size=self.text_size,
                 font_weight=BOLD,
                 padding = (15,32,0,10)
@@ -369,7 +382,7 @@ class Send(Box):
         self.fee_input = NumberInput(
             style=Pack(
                 color = WHITE,
-                background_color = rgb(40,43,48),
+                background_color = rgb(30,33,36),
                 font_size=input_size,
                 text_align=CENTER,
                 flex= 1.5,
@@ -385,7 +398,7 @@ class Send(Box):
         self.empty_label = Label(
             text="",
             style=Pack(
-                background_color=rgb(66,69,73),
+                background_color=rgb(40,43,48),
                 font_size=self.text_size,
                 flex = 1,
                 padding = (10,0,0,0)
@@ -395,7 +408,7 @@ class Send(Box):
         self.fee_box = Box(
             style=Pack(
                 direction = ROW,
-                background_color = rgb(66,69,73),
+                background_color = rgb(40,43,48),
                 height = 70,
                 alignment=CENTER
             )
@@ -405,7 +418,7 @@ class Send(Box):
             vertical=True,
             horizontal=False,
             style=Pack(
-                background_color=rgb(30,33,36),
+                background_color=rgb(40,43,48),
                 flex = 7,
                 padding=(0,10,0,10)
             )
@@ -414,7 +427,7 @@ class Send(Box):
         self.options_box = Box(
             style=Pack(
                 direction=COLUMN,
-                background_color=rgb(30,33,36),
+                background_color=rgb(40,43,48),
                 flex = 1
             )
         )
@@ -457,6 +470,7 @@ class Send(Box):
         )
         self.destination_box.add(
             self.destination_input,
+            self.address_book,
             self.scan_address
         )
         self.amount_box.add(
@@ -477,7 +491,7 @@ class Send(Box):
             self.send_button
         )
 
-        asyncio.create_task(self.update_balance())
+        self.app.loop.create_task(self.update_balance())
 
 
 
@@ -530,6 +544,15 @@ class Send(Box):
                 
         self.amount_input.value = ""
         self.amount_slider.value = 0
+
+
+    def show_address_book(self, view):
+        address_book = self.addresses_storage.get_address_book()
+        self.book_dialog = RelativeDialog(self.app.activity, "Address Book", True, view_space=20, scrollable=True)
+        for data in address_book:
+            address_info = Address(self.script_path, self.utils, data, True, self)
+            self.book_dialog.add(address_info)
+        self.book_dialog.show()
 
     
     def scan_qr_address(self, view):
