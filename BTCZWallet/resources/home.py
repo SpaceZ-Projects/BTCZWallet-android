@@ -300,8 +300,8 @@ class Home(Box):
             self.transactions_scroll
         )
 
-        asyncio.create_task(self.update_balances())
-        asyncio.create_task(self.load_transactions())
+        self.app.loop.create_task(self.update_balances())
+        self.app.loop.create_task(self.load_transactions())
 
 
     def update_status(self, status, color):
@@ -347,7 +347,7 @@ class Home(Box):
             await asyncio.sleep(0.0)
 
         await asyncio.sleep(1)
-        asyncio.create_task(self.update_transactions())
+        self.app.loop.create_task(self.update_transactions())
 
 
     async def update_transactions(self):

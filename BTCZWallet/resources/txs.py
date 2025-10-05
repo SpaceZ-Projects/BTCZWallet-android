@@ -46,18 +46,22 @@ class Txid(Box):
         if 1200 < x <= 1600:
             text_size = 15
             time_size = 12
+            category_size = 13
             conf_height = 40
         elif 800 < x <= 1200:
             text_size = 12
             time_size = 9
+            category_size = 10
             conf_height = 40
         elif 480 < x <= 800:
             text_size = 10
             time_size = 7
+            category_size = 8
             conf_height = 35
         else:
             text_size = 18
             time_size = 15
+            category_size = 16
             conf_height = 45
         
         if category == "receive":
@@ -80,8 +84,8 @@ class Txid(Box):
         elif confirmations < 0:
             icon = f"{self.script_path}/images/0.png"
         else:
-            self.has_confirmed = True
             icon = f"{self.script_path}/images/confirmed.png"
+            self.has_confirmed = True
 
         self.confirmations_icon = ImageView(
             image=icon,
@@ -98,7 +102,7 @@ class Txid(Box):
             style=Pack(
                 color=color,
                 background_color=rgb(20,20,20),
-                font_size=text_size,
+                font_size=category_size,
                 font_weight=BOLD,
                 text_align=CENTER,
                 flex = 1,
@@ -131,6 +135,7 @@ class Txid(Box):
             )
         )
 
+        self._impl.native.setClickable(True)
         self._impl.native.setOnClickListener(ClickListener(self.show_tx_info))
 
         self.add(
@@ -209,7 +214,7 @@ class Transactions(ScrollContainer):
 
         self.content = self.transactions_box
 
-        asyncio.create_task(self.load_transactions())
+        self.app.loop.create_task(self.load_transactions())
 
 
     def get_transactions(self, limit, offset):
@@ -240,7 +245,7 @@ class Transactions(ScrollContainer):
             await asyncio.sleep(0.0)
 
         await asyncio.sleep(1)
-        asyncio.create_task(self.update_transactions())
+        self.app.loop.create_task(self.update_transactions())
 
 
     async def update_transactions(self):
@@ -314,7 +319,7 @@ class Transactions(ScrollContainer):
         if self.no_more_transactions or self.scroll_toggle:
             return
         if self.vertical_position == self.max_vertical_position:
-            asyncio.create_task(self.get_transactions_archive())
+            self.app.loop.create_task(self.get_transactions_archive())
 
 
     async def get_transactions_archive(self):

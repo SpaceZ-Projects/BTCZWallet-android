@@ -1,6 +1,7 @@
 
 import asyncio
 from datetime import datetime
+import json
 
 from toga import (
     App, MainWindow, Box, Label, ScrollContainer, MultilineTextInput
@@ -37,16 +38,16 @@ class Mining(Box):
         x = self.utils.screen_resolution()
         if 1200 < x <= 1600:
             title_size = 21
-            text_size = 15
+            text_size = 14
         elif 800 < x <= 1200:
             title_size = 18
-            text_size = 12
+            text_size = 11
         elif 480 < x <= 800:
             title_size = 15
-            text_size = 10
+            text_size = 9
         else:
             title_size = 24
-            text_size = 18
+            text_size = 17
 
         self.title_label = Label(
             text="Mining Stats",
@@ -297,6 +298,7 @@ class Mining(Box):
                 font_size=text_size,
                 font_weight=BOLD,
                 text_align=CENTER,
+                flex = 1,
                 padding = (15,0,0,10)
             )
         )
@@ -311,6 +313,17 @@ class Mining(Box):
                 text_align=CENTER,
                 flex = 1,
                 padding = (15,0,0,0)
+            )
+        )
+
+        self.shares_box = Box(
+            style=Pack(
+                direction=ROW,
+                background_color=rgb(20,20,20),
+                height = 60,
+                alignment=CENTER,
+                padding = 3
+                
             )
         )
 
@@ -335,12 +348,12 @@ class Mining(Box):
                 font_size=text_size,
                 font_weight=BOLD,
                 text_align=CENTER,
-                flex = 1.5,
+                flex = 1,
                 padding = (15,0,0,0)
             )
         )
 
-        self.shares_box = Box(
+        self.solutions_box = Box(
             style=Pack(
                 direction=ROW,
                 background_color=rgb(20,20,20),
@@ -535,6 +548,7 @@ class Mining(Box):
             self.region_box,
             self.worker_box,
             self.shares_box,
+            self.solutions_box,
             self.paid_box,
             self.balance_box,
             self.immature_box,
@@ -561,7 +575,9 @@ class Mining(Box):
         )
         self.shares_box.add(
             self.shares_label,
-            self.shares_value,
+            self.shares_value
+        )
+        self.solutions_box.add(
             self.solutions_label,
             self.solutions_value
         )
@@ -586,7 +602,7 @@ class Mining(Box):
     def run_mining_task(self):
         if not self.mining_toggle:
             self.mining_toggle = True
-            asyncio.create_task(self.update_mining_stats())
+            self.app.loop.create_task(self.update_mining_stats())
 
 
     async def update_mining_stats(self):
@@ -598,6 +614,8 @@ class Mining(Box):
                 color = RED
                 status = "Off"
             else:
+                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+                result = json.loads(decrypted)
                 color = GREENYELLOW
                 status = "On"
 

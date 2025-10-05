@@ -1,5 +1,6 @@
 
 import asyncio
+import json
 
 from toga import App, MainWindow, Box, Label, Button, TextInput, ImageView, ScrollContainer
 from ..framework import ClickListener, ToastMessage
@@ -319,10 +320,29 @@ class ServerSetup(ScrollContainer):
             self.confirm_button.enabled = True
             ToastMessage("Failed to connect to the server")
             return
-        if "version" not in result:
+        decrypted = self.units.decrypt_data(secret, result["data"])
+        result = json.loads(decrypted)
+        version = result.get('version')
+        min_version = (1, 4, 6)
+        if not version:
             self.main.error_dialog(
                 title="Update Required",
-                message=f"Server version is too old. Please update to at least 1.3.8"
+                message=f"Server version is too old. Please update to at least 1.4.6"
+            )
+            return
+        try:
+            version_tuple = tuple(int(x) for x in version.split("."))
+        except ValueError:
+            self.main.error_dialog(
+                title="Update Required",
+                message=f"Invalid server version format: {version}"
+            )
+            return
+
+        if version_tuple < min_version:
+            self.main.error_dialog(
+                title="Update Required",
+                message=f"Server version {version} is too old. Please update to at least 1.4.6"
             )
             return
         height = result.get('height')
