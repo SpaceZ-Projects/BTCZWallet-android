@@ -16,10 +16,11 @@ from aiohttp_socks import ProxyConnector, ProxyConnectionError, ProxyError
 
 
 class Utils:
-    def __init__(self, app:App, activity):
+    def __init__(self, app:App, activity, units):
 
         self.app = app
         self.activity = activity
+        self.units = units
 
         if not os.path.exists(self.app.paths.cache):
             os.makedirs(self.app.paths.cache)
@@ -59,19 +60,19 @@ class Utils:
             return None
     
 
-    async def make_request(self, key, secret, url, params = None):
+    async def make_request(self, key, secret, url, params=None):
         if params is None:
             params = {}
         params = {k: str(v) for k, v in params.items()}
-        
+
         connector = ProxyConnector.from_url(f'socks5://127.0.0.1:9050')
+
+        message_payload = json.dumps(params, separators=(",", ":"), sort_keys=True)
         timestamp = datetime.now(timezone.utc).isoformat()
-        message = f"{timestamp}.{json.dumps(params, separators=(',', ':'), sort_keys=True)}"
-        signature = hmac.new(
-            secret.encode(),
-            message.encode(),
-            hashlib.sha512
-        ).hexdigest()
+        message = f"{timestamp}.{message_payload}"
+        signature = hmac.new(secret.encode(), message.encode(), hashlib.sha512).hexdigest()
+        encrypted_params = self.units.encrypt_data(secret, json.dumps(params))
+
         headers = {
             'Authorization': key,
             'X-Timestamp': timestamp,
@@ -79,10 +80,16 @@ class Utils:
         }
         try:
             async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.get(url, headers=headers, params=params) as response:
-                    data = await response.json()
-                    await session.close()
-                    return data
+                if params:
+                    async with session.get(url, headers=headers, params={"data": encrypted_params}) as response:
+                        data = await response.json()
+                        await session.close()
+                        return data
+                else:
+                    async with session.get(url, headers=headers) as response:
+                        data = await response.json()
+                        await session.close()
+                        return data
         except (ProxyConnectionError, ProxyError, ClientError, ClientConnectionError):
             return None
         except Exception as e:
