@@ -337,6 +337,8 @@ class Menu(OptionContainer):
                     timestamp = data.get('timestamp')
                     if txid not in transactions_data:
                         self.insert_transaction(tx_type, category, address, txid, amount, blocks, txfee, timestamp)
+                        if category == "receive":
+                            self.app.notify.show(f"Receive", f"{amount} BTCZ")
                     else:
                         self.update_blocks(txid, blocks)
 

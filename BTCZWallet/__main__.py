@@ -3,7 +3,10 @@ import asyncio
 from pathlib import Path
 
 from toga import App, MainWindow, Box, ImageView, Label, Button, ScrollContainer
-from .framework import MainActivity, AppProxy, QRScanner, SelectFolderDialog
+from .framework import (
+    MainActivity, AppProxy, QRScanner, SelectFolderDialog,
+    Notification
+)
 from toga.style.pack import Pack
 from toga.constants import COLUMN, CENTER, BOLD, ROW
 from toga.colors import rgb, WHITE, YELLOW, BLACK, GRAY
@@ -20,8 +23,9 @@ class BitcoinZGUI(MainWindow):
 
         self.proxy = proxy
         version = self.app.version
-        self.utils = Utils(self.app, self.app.activity)
+
         self.units = Units()
+        self.utils = Utils(self.app, self.app.activity, self.units)
         self.device_storage = DeviceStorage(self.app)
         self.qr_scanner = QRScanner(self.app.activity)
         self.select_folder = SelectFolderDialog(self.app.activity)
@@ -143,7 +147,7 @@ class BitcoinZGUI(MainWindow):
         self.main_scroll.content = self.main_box
 
         self.show_wizard()
-        asyncio.create_task(self.check_device_account())
+        self.app.loop.create_task(self.check_device_account())
 
 
     def show_wizard(self):
@@ -193,6 +197,7 @@ class BitcoinZWallet(App):
         self.proxy = AppProxy()
         self.proxy._back_callback = self.on_back_pressed
         self.activity = MainActivity.singletonThis
+        self.notify = Notification(self.activity)
         
         self.window_toggle = None
 

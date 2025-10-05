@@ -1,22 +1,25 @@
 
 import asyncio
 import time
+from collections import deque
 
 from java import dynamic_proxy, cast, jclass
 from java.lang import Runnable
 from java.util import Arrays
 from java.io import FileInputStream
-from android.app import AlertDialog
+from android.app import AlertDialog, NotificationChannel, NotificationManager, PendingIntent
+from android.os import Build
 from android.net import Uri
 from android.view import View
-from android.content import ClipboardManager, ClipData
+from android.content import ClipboardManager, ClipData, Intent
 from android.text import InputType
 from android.view.animation import TranslateAnimation
 from android.content.res import Configuration
+from androidx.core.app import NotificationCompat, NotificationManagerCompat
 from androidx.documentfile.provider import DocumentFile
 from android.graphics import Point, Color
 from androidx.activity.result import ActivityResultCallback
-from android.widget import Toast, RelativeLayout, LinearLayout, ImageView
+from android.widget import Toast, RelativeLayout, LinearLayout, ImageView, ScrollView
 from org.beeware.android import MainActivity, IPythonApp, PortraitCaptureActivity
 
 from com.journeyapps.barcodescanner import ScanOptions, ScanContract
@@ -174,7 +177,66 @@ class ClickListener(dynamic_proxy(View.OnClickListener)):
     def onClick(self, view):
         result = self.callback(view)
         if asyncio.iscoroutine(result):
-            asyncio.create_task(result)
+            App.app.loop.create_task(result)
+
+
+class Notification:
+    CHANNEL_ID = "bitcoinz_wallet"
+    CHANNEL_NAME = "BTCZ Notifications"
+    MAX_NOTIFICATIONS = 3
+
+    def __init__(self, activity):
+        self.activity = activity
+        self._notif_counter = 0
+        self._active_notifs = deque()
+        self._ensure_channel()
+
+    def _ensure_channel(self):
+        if Build.VERSION.SDK_INT >= 26:
+            channel = NotificationChannel(
+                self.CHANNEL_ID,
+                self.CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH,
+            )
+            nm = cast(NotificationManager, self.activity.getSystemService(
+                self.activity.NOTIFICATION_SERVICE))
+            nm.createNotificationChannel(channel)
+
+    def show(self, title: str, message: str, notif_id: int = 1):
+        self._notif_counter += 1
+        notif_id = self._notif_counter
+
+        if len(self._active_notifs) >= self.MAX_NOTIFICATIONS:
+            oldest_id = self._active_notifs.popleft()
+            self.hide(oldest_id)
+
+        self._active_notifs.append(notif_id)
+
+        icon_id = self.activity.getResources().getIdentifier(
+            "ic_launcher", "mipmap", self.activity.getPackageName()
+        )
+        builder = NotificationCompat.Builder(self.activity, self.CHANNEL_ID)
+        builder.setSmallIcon(icon_id)
+        builder.setContentTitle(title)
+        builder.setContentText(message)
+        builder.setPriority(NotificationCompat.PRIORITY_HIGH)
+        builder.setDefaults(NotificationCompat.DEFAULT_ALL)
+        builder.setAutoCancel(True)
+        intent = Intent(self.activity, self.activity.getClass())
+        pending = PendingIntent.getActivity(
+            self.activity, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        )
+        builder.setFullScreenIntent(pending, True)
+
+        nm = getattr(NotificationManagerCompat, "from")(self.activity)
+        nm.notify(notif_id, builder.build())
+
+    def hide(self, notif_id: int):
+        nm = getattr(NotificationManagerCompat, "from")(self.activity)
+        nm.cancel(notif_id)
+        if notif_id in self._active_notifs:
+            self._active_notifs.remove(notif_id)
 
 
 class ToastMessage:
@@ -207,13 +269,15 @@ class CopyText():
 
 
 class RelativeDialog:
-    def __init__(self, activity, title=None, cancelable=True, top_space=40, bottom_space=40):
+    def __init__(self, activity, title=None, cancelable=True, top_space=40, bottom_space=40, view_space=0, scrollable=False):
         super().__init__()
 
         self.activity = activity
         self.dialog = None
         self.top_space = top_space
         self.bottom_space = bottom_space
+        self.view_space = view_space
+        self.scrollable = scrollable
 
         builder = AlertDialog.Builder(activity)
         builder.setCancelable(cancelable)
@@ -221,8 +285,14 @@ class RelativeDialog:
         if title:
             builder.setTitle(title)
 
-        self.layout = RelativeLayout(activity)
-        builder.setView(self.layout)
+        if scrollable:
+            self.scroll = ScrollView(activity)
+            self.layout = RelativeLayout(activity)
+            self.scroll.addView(self.layout)
+            builder.setView(self.scroll)
+        else:
+            self.layout = RelativeLayout(activity)
+            builder.setView(self.layout)
 
         self.dialog = builder.create()
         self.last_view_id = 0
@@ -296,6 +366,8 @@ class RelativeDialog:
 
             if i == 0:
                 lp.topMargin = self.top_space
+            else:
+                lp.topMargin = self.view_space
 
             if i == count - 1:
                 lp.bottomMargin = self.bottom_space
