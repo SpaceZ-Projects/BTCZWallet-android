@@ -332,14 +332,22 @@ class Home(Box):
             await asyncio.sleep(5)
 
 
-    async def load_transactions(self):
-        transactions = self.txs_storage.get_transactions()
-        transactions = sorted(
-            transactions,
+    def get_transactions(self, limit, offset):
+        transactions_list = self.txs_storage.get_transactions()
+        if not transactions_list:
+            return []
+        sorted_transactions = sorted(
+            transactions_list,
             key=operator.itemgetter(7),
             reverse=True
         )
-        for data in transactions[:20]:
+        transactions = sorted_transactions[offset:offset + limit]
+        return transactions
+
+
+    async def load_transactions(self):
+        transactions = self.get_transactions(20, 0)
+        for data in transactions:
             txid = data[3]
             transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
             self.transactions_data[txid] = transaction_info
@@ -356,20 +364,20 @@ class Home(Box):
                 await asyncio.sleep(1)
                 continue
             height = self.wallet_storage.get_info("height")
-            transactions = self.txs_storage.get_transactions()
+            transactions = self.get_transactions(20, 0)
             transactions = sorted(
                 transactions,
                 key=operator.itemgetter(7),
-                reverse=True
+                reverse=False
             )
-            for data in transactions[:20]:
+            for data in transactions:
                 tx_type = data[0]
                 txid = data[3]
                 blocks = data[5]
                 if txid not in self.transactions_data:
                     transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
-                    self.transactions_data[txid] = transaction_info
                     self.transactions_box.insert(0, transaction_info)
+                    self.transactions_data[txid] = transaction_info
                     if len(self.transactions_data) > 20:
                         child = self.transactions_box.children[20]
                         self.transactions_box.remove(child)
@@ -391,5 +399,4 @@ class Home(Box):
                             existing_tx.confirmations_icon.image = icon
                             existing_tx.has_confirmed = True
 
-            
             await asyncio.sleep(5)

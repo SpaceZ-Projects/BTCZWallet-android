@@ -232,11 +232,6 @@ class Transactions(ScrollContainer):
 
     async def load_transactions(self):
         transactions = self.get_transactions(self.transactions_count, self.transactions_from)
-        transactions = sorted(
-            transactions,
-            key=operator.itemgetter(7),
-            reverse=True
-        )
         for data in transactions:
             txid = data[3]
             transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
@@ -254,20 +249,20 @@ class Transactions(ScrollContainer):
                 await asyncio.sleep(1)
                 continue
             height = self.wallet_storage.get_info("height")
-            transactions = self.txs_storage.get_transactions()
+            transactions = self.get_transactions(20, 0)
             transactions = sorted(
                 transactions,
                 key=operator.itemgetter(7),
-                reverse=True
+                reverse=False
             )
-            for data in transactions[:20]:
+            for data in transactions:
                 tx_type = data[0]
                 txid = data[3]
                 blocks = data[5]
                 if txid not in self.transactions_data:
                     transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
-                    self.transactions_data[txid] = transaction_info
                     self.transactions_box.insert(0, transaction_info)
+                    self.transactions_data[txid] = transaction_info
                     await asyncio.sleep(0.0)
                 else:
                     confirmations = 0
@@ -300,11 +295,6 @@ class Transactions(ScrollContainer):
         self.transactions_data.clear()
         self.transactions_box.clear()
         transactions = self.get_transactions(self.transactions_count, self.transactions_from)
-        transactions = sorted(
-            transactions,
-            key=operator.itemgetter(7),
-            reverse=True
-        )
         for data in transactions:
             txid = data[3]
             transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
