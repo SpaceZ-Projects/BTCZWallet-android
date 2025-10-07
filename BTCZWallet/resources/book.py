@@ -5,7 +5,7 @@ from toga import (
     App, MainWindow, Box, Label, ScrollContainer, TextInput,
     Button, ImageView
 )
-from ..framework import ToastMessage, ClickListener
+from ..framework import ToastMessage, ClickListener, CopyText
 from toga.style.pack import Pack
 from toga.constants import COLUMN, CENTER, BOLD, ROW
 from toga.colors import rgb, GRAY, WHITE, YELLOW, GREENYELLOW, BLACK, TRANSPARENT
@@ -91,6 +91,9 @@ class Address(Box):
                 )
             )
 
+            self._impl.native.setClickable(True)
+            self._impl.native.setOnClickListener(ClickListener(self.copy_address))
+
             self.add(
                 self.contact_icon,
                 self.name_label
@@ -100,6 +103,9 @@ class Address(Box):
     async def _on_address_tap(self, button):
         self.send_page.destination_input.value = self.address
         self.send_page.book_dialog.hide()
+
+    def copy_address(self, view):
+        CopyText(self.address)
 
 
 
@@ -124,6 +130,7 @@ class AddressBook(Box):
         self.addresses_storage = AddressesStorage(self.app)
 
         self.book_toggle = None
+        self.addresses_data = {}
 
         x = self.utils.screen_resolution()
         if 1200 < x <= 1600:
@@ -294,9 +301,37 @@ class AddressBook(Box):
     async def load_address_book(self):
         address_book = self.addresses_storage.get_address_book()
         for data in address_book:
+            address = data[1]
             address_info = Address(self.script_path, self.utils, data)
+            self.addresses_data[address] = address_info
             self.book_list.add(address_info)
             await asyncio.sleep(0.0)
+
+        await asyncio.sleep(1)
+        self.app.loop.create_task(self.update_address_book())
+
+
+    async def update_address_book(self):
+        local_addresses = []
+        while True:
+            address_book = self.addresses_storage.get_address_book()
+            for data in address_book:
+                address = data[1]
+                local_addresses.append(address)
+                if address not in self.addresses_data:
+                    address_info = Address(self.script_path, self.utils, data)
+                    self.addresses_data[address] = address_info
+                    self.book_list.add(address_info)
+                    await asyncio.sleep(0.0)
+            
+            for address in self.addresses_data:
+                if address not in local_addresses:
+                    existing_address = self.addresses_data[address]
+                    self.book_list.remove(existing_address)
+
+            local_addresses.clear()
+            
+            await asyncio.sleep(5)
 
 
     def show_inputs(self, button):
@@ -378,9 +413,6 @@ class AddressBook(Box):
             )
         else:
             self.addresses_storage.insert_book(name, address)
-            data = [name, address]
-            address_info = Address(self.script_path, self.utils, data)
-            self.book_list.add(address_info)
             self.enable_buttons()
             self.name_input.value = ""
             self.destination_input.value = ""

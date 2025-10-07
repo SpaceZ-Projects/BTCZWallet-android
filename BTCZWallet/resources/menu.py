@@ -370,8 +370,6 @@ class Menu(OptionContainer):
                     if address not in server_addresses:
                         self.addresses_storage.delete_address_book(address)
 
-                return
-
             await asyncio.sleep(10)
 
 
