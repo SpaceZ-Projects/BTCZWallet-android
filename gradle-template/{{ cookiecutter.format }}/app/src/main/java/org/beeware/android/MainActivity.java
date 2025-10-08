@@ -171,6 +171,15 @@ public class MainActivity extends AppCompatActivity {
     }
     protected void onDestroy() {
         Log.d(TAG, "onDestroy() start");
+
+        if (pythonApp != null && pythonApp.containsKey("stopTor")) {
+            try {
+                pythonApp.callAttr("stopTor");
+            } catch (Exception e) {
+                Log.e(TAG, "Error stopping Tor", e);
+            }
+        }
+
         super.onDestroy();
         userCode("onDestroy");
         Log.d(TAG, "onDestroy() complete");

@@ -16,4 +16,7 @@ public interface IPythonApp {
     void onConfigurationChanged(Configuration newConfig);
     boolean onOptionsItemSelected(MenuItem menuitem);
     boolean onPrepareOptionsMenu(Menu menu);
+    void startTor();
+    void stopTor();
+    boolean isRunning();
 }

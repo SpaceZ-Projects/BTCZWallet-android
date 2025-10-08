@@ -20,7 +20,7 @@ from androidx.documentfile.provider import DocumentFile
 from android.graphics import Point, Color
 from androidx.activity.result import ActivityResultCallback
 from android.widget import Toast, RelativeLayout, LinearLayout, ImageView, ScrollView
-from org.beeware.android import MainActivity, IPythonApp, PortraitCaptureActivity
+from org.beeware.android import MainActivity, IPythonApp, PortraitCaptureActivity, TorController
 
 from com.journeyapps.barcodescanner import ScanOptions, ScanContract
 
@@ -132,9 +132,13 @@ class AppProxy(dynamic_proxy(IPythonApp)):
     def __init__(self):
         super().__init__()
 
+        self.activity = MainActivity.singletonThis
+        self.tor_controller = TorController(self.activity)
+
         self._back_callback = None
         self._qr_callback = None
         self._config_changed_callback = None
+              
 
     def onBackPressed(self):
         if self._back_callback:
@@ -152,6 +156,24 @@ class AppProxy(dynamic_proxy(IPythonApp)):
                 self._config_changed_callback(newConfig)
             except Exception as e:
                 print("Configuration change callback error:", e)
+
+    def startTor(self):
+        try:
+            self.tor_controller.startTor()
+        except Exception as e:
+            return None
+
+    def stopTor(self):
+        try:
+            self.tor_controller.stopTor()
+        except Exception as e:
+            return None
+
+    def isRunning(self):
+        try:
+            return self.tor_controller.isRunning()
+        except Exception as e:
+            return None
     
     def Restart(self):
         MainActivity.singletonThis.Restart()

@@ -123,7 +123,7 @@ class BitcoinZGUI(MainWindow):
         )
 
         self.tor_button = Button(
-            text="Mobile Server",
+            text="",
             style=Pack(
                 color=BLACK,
                 background_color = GRAY,
@@ -147,7 +147,7 @@ class BitcoinZGUI(MainWindow):
         self.main_scroll.content = self.main_box
 
         self.show_wizard()
-        self.app.loop.create_task(self.check_device_account())
+        self.app.loop.create_task(self.verify_tor_network())
 
 
     def show_wizard(self):
@@ -165,8 +165,18 @@ class BitcoinZGUI(MainWindow):
             self.tor_button
         )
 
+
+    async def verify_tor_network(self):
+        self.tor_button.text = "Waiting Tor..."
+        while True:
+            if self.proxy.isRunning():
+                await self.check_device_account()
+                return
+            await asyncio.sleep(5)
+
     
     async def check_device_account(self):
+        self.tor_button.text = "Mobile Server"
         device_auth = self.device_storage.get_auth()
         if device_auth:
             await asyncio.sleep(1)
@@ -205,12 +215,14 @@ class BitcoinZWallet(App):
     def startup(self):
         MainActivity.setPythonApp(self.proxy)
         self.main_window = BitcoinZGUI(self.proxy)
+        self.proxy.startTor()
         self.main_window.show()
 
 
     def on_back_pressed(self):
         def on_result(widget, result):
             if result is True:
+                self.proxy.stopTor()
                 self.proxy.Exit()
         if self.window_toggle:
             self.main_window.main_box.clear()
