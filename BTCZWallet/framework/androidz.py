@@ -13,7 +13,6 @@ from android.net import Uri
 from android.view import View
 from android.content import ClipboardManager, ClipData, Intent
 from android.text import InputType
-from android.view.animation import TranslateAnimation
 from android.content.res import Configuration
 from androidx.core.app import NotificationCompat, NotificationManagerCompat
 from androidx.documentfile.provider import DocumentFile

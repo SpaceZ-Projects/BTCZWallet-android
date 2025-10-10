@@ -19,6 +19,7 @@ class Address(Box):
         super().__init__(
             style=Pack(
                 direction=ROW,
+                background_color=rgb(20,20,20),
                 height = 60,
                 alignment=CENTER,
                 padding = 3
@@ -34,12 +35,6 @@ class Address(Box):
         self.option = option
         self.send_page = send_page
 
-        if not option:
-            background_color=rgb(20,20,20)
-        else:
-            background_color=TRANSPARENT
-        self.style.background_color = background_color
-
         x = self.utils.screen_resolution()
         if 1200 < x <= 1600:
             text_size = 16
@@ -54,63 +49,49 @@ class Address(Box):
             text_size = 19
             icon_width = 40
 
-        if option:
-            self.name_button = Button(
-                text=self.name,
-                style=Pack(
-                    color=BLACK,
-                    background_color=YELLOW,
-                    font_weight=BOLD
-                ),
-                on_press=self._on_address_tap
+        self.contact_icon = ImageView(
+            image=f"{self.script_path}/images/contact.png",
+            style=Pack(
+                background_color=rgb(20,20,20),
+                height = icon_width,
+                padding=(10,0,0,5),
+                alignment=CENTER
             )
-            self.add(
-                self.name_button
-            )
-        else:
-            self.contact_icon = ImageView(
-                image=f"{self.script_path}/images/contact.png",
-                style=Pack(
-                    background_color=background_color,
-                    height = icon_width,
-                    padding=(10,0,0,5),
-                    alignment=CENTER
-                )
-            )
+        )
 
-            self.name_label = Label(
-                text=self.name,
-                style=Pack(
-                    color=WHITE,
-                    font_size=text_size,
-                    font_weight=BOLD,
-                    background_color=background_color,
-                    text_align=CENTER,
-                    flex=1,
-                    padding = (15,0,0,0)
-                )
+        self.name_label = Label(
+            text=self.name,
+            style=Pack(
+                color=WHITE,
+                font_size=text_size,
+                font_weight=BOLD,
+                background_color=rgb(20,20,20),
+                text_align=CENTER,
+                flex=1,
+                padding = (15,0,0,0)
             )
+        )
 
-            self._impl.native.setClickable(True)
-            self._impl.native.setOnClickListener(ClickListener(self.copy_address))
+        self._impl.native.setClickable(True)
+        self._impl.native.setOnClickListener(ClickListener(self.copy_address))
 
-            self.add(
-                self.contact_icon,
-                self.name_label
-            )
-
-    
-    async def _on_address_tap(self, button):
-        self.send_page.destination_input.value = self.address
-        self.send_page.book_dialog.hide()
+        self.add(
+            self.contact_icon,
+            self.name_label
+        )
+        
 
     def copy_address(self, view):
-        CopyText(self.address)
+        if self.option:
+            self.send_page.destination_input.value = self.address
+            self.send_page.hide_address_book()
+        else:
+            CopyText(self.address)
 
 
 
 class AddressBook(Box):
-    def __init__(self, app:App, main:MainWindow, script_path, utils, units):
+    def __init__(self, app:App, main:MainWindow, script_path, utils, units, option=None, send_page=None):
         super().__init__(
             style=Pack(
                 direction = COLUMN,
@@ -125,6 +106,8 @@ class AddressBook(Box):
         self.script_path = script_path
         self.utils = utils
         self.units = units
+        self.option = option
+        self.send_page = send_page
 
         self.device_storage = DeviceStorage(self.app)
         self.addresses_storage = AddressesStorage(self.app)
@@ -273,23 +256,28 @@ class AddressBook(Box):
 
         self.book_scroll.content = self.book_list
 
-        self.add(
-            self.menu_box,
+        if option:
+            self.add(
             self.book_scroll
-        )
-        self.menu_box.add(
-            self.add_button,
-            self.title_label
-        )
-        self.inputs_box.add(
-            self.name_input,
-            self.destination_box,
-            self.confirm_button
-        )
-        self.destination_box.add(
-            self.destination_input,
-            self.scan_address
-        )
+            )
+        else:
+            self.add(
+                self.menu_box,
+                self.book_scroll
+            )
+            self.menu_box.add(
+                self.add_button,
+                self.title_label
+            )
+            self.inputs_box.add(
+                self.name_input,
+                self.destination_box,
+                self.confirm_button
+            )
+            self.destination_box.add(
+                self.destination_input,
+                self.scan_address
+            )
 
 
     def run_book_task(self):
@@ -302,13 +290,14 @@ class AddressBook(Box):
         address_book = self.addresses_storage.get_address_book()
         for data in address_book:
             address = data[1]
-            address_info = Address(self.script_path, self.utils, data)
+            address_info = Address(self.script_path, self.utils, data, self.option, self.send_page)
             self.addresses_data[address] = address_info
             self.book_list.add(address_info)
             await asyncio.sleep(0.0)
 
-        await asyncio.sleep(1)
-        self.app.loop.create_task(self.update_address_book())
+        if not self.option:
+            await asyncio.sleep(1)
+            self.app.loop.create_task(self.update_address_book())
 
 
     async def update_address_book(self):

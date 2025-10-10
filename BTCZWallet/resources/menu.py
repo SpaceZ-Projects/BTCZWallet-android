@@ -178,6 +178,8 @@ class Menu(OptionContainer):
                     message="Are you sure you want exit the app",
                     on_result=on_result
                 )
+            elif self.send_page.book_toggle:
+                self.send_page.hide_address_book()
             elif self.more_toggle:
                 self.more_toggle = None
                 self.current_tab = self.switch_options

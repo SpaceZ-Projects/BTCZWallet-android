@@ -13,13 +13,13 @@ from toga.style.pack import Pack
 from toga.constants import COLUMN, ROW, CENTER, BOLD
 from toga.colors import rgb, GRAY, YELLOW, WHITE, BLACK, RED, GREENYELLOW
 
-from .book import Address
+from .book import AddressBook
 from .storage import DeviceStorage, AddressesStorage
 
 
 class CashOut(RelativeDialog):
     def __init__(self, app:App, script_path, utils, units, info, title=None, cancelable=False):
-        super().__init__(app.activity, title, cancelable)
+        super().__init__(app.activity, title, cancelable, view_space=20)
 
         self.script_path = script_path
 
@@ -31,12 +31,16 @@ class CashOut(RelativeDialog):
         x = utils.screen_resolution()
         if 1200 < x <= 1600:
             text_size = 15
+            address_size = 13
         elif 800 < x <= 1200:
             text_size = 12
+            address_size = 10
         elif 480 < x <= 800:
             text_size = 10
+            address_size = 8
         else:
             text_size = 18
+            address_size = 16
 
         self.tx_type_label = Label(
             text=f"Type : {tx_type}",
@@ -60,7 +64,7 @@ class CashOut(RelativeDialog):
             text=address,
             style=Pack(
                 color= WHITE,
-                font_size = text_size
+                font_size = address_size
             )
         )
 
@@ -183,6 +187,8 @@ class Send(Box):
         self.device_storage = DeviceStorage(self.app)
         self.addresses_storage = AddressesStorage(self.app)
 
+        self.book_toggle = None
+
         x = self.utils.screen_resolution()
         if 1200 < x <= 1600:
             self.text_size = 15
@@ -255,9 +261,9 @@ class Send(Box):
                 flex = 1,
                 padding = (10,10,0,10)
             ),
-            on_gain_focus=self.on_gain_focus,
             on_change=self.check_address
         )
+        self.destination_input._impl.native.setShowSoftInputOnFocus(False)
 
         self.address_book = ImageView(
             image=f"{self.script_path}/images/book_w.png",
@@ -290,13 +296,11 @@ class Send(Box):
             )
         )
 
-        self.amount_label = Label(
-            text="Amount :",
+        self.btcz_icon = ImageView(
+            image=f"{self.script_path}/images/BitcoinZ-round-48.png",
             style=Pack(
-                color=GRAY,
                 background_color=rgb(40,43,48),
-                font_size=self.text_size,
-                font_weight=BOLD,
+                width=icon_width,
                 padding = (15,0,0,10)
             )
         )
@@ -474,7 +478,7 @@ class Send(Box):
             self.scan_address
         )
         self.amount_box.add(
-            self.amount_label,
+            self.btcz_icon,
             self.amount_input,
             self.check_amount_label
         )
@@ -547,12 +551,17 @@ class Send(Box):
 
 
     def show_address_book(self, view):
-        address_book = self.addresses_storage.get_address_book()
-        self.book_dialog = RelativeDialog(self.app.activity, "Address Book", True, view_space=20, scrollable=True)
-        for data in address_book:
-            address_info = Address(self.script_path, self.utils, data, True, self)
-            self.book_dialog.add(address_info)
-        self.book_dialog.show()
+        if not self.book_toggle:
+            self.book_toggle = True
+            self.book_dialog = AddressBook(self.app, self.main, self.script_path, self.utils, self.units, True, self)
+            self.options_box.insert(1, self.book_dialog)
+            self.app.loop.create_task(self.book_dialog.load_address_book())
+        else:
+            self.hide_address_book()
+
+    def hide_address_book(self):
+        self.options_box.remove(self.book_dialog)
+        self.book_toggle = None
 
     
     def scan_qr_address(self, view):
@@ -692,10 +701,6 @@ class Send(Box):
             return
         formatted = self.units.format_balance(amount)
         self.amount_input._impl.native.setText(formatted)
-
-
-    def on_gain_focus(self, input):
-        self.adjust_size()
 
     
     def on_focus_change(self, v, has_focus):
