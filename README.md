@@ -2,16 +2,30 @@ BTCZWallet-android
 ==========
 
 **BTCZWallet-android** is a lightweight **mobile client** for
-[BTCZWallet-win](<https://github.com/SpaceZ-Projects/BTCZWallet-win>).  
-It connects to the server via **HTTPS over Orbot (Tor proxy)** to provide a secure
-and private way of managing **BitcoinZ (BTCZ)** on Android devices.
+[BTCZWallet-win](https://github.com/SpaceZ-Projects/BTCZWallet-win).  
+It connects to your personal wallet server through an **HTTP channel routed via Tor**,  
+with all request data **end-to-end encrypted using PyNaCl**.  
+
+This layered design ensures that every communication between the Android client and the server  
+is protected by both **network anonymity (Tor)** and **cryptographic secrecy (PyNaCl)**,  
+providing a highly secure and private way to manage **BitcoinZ (BTCZ)** on Android devices.
 
 Privacy & Security
 ------------------
 
-- All communication is routed through **Tor** (via Orbot).  
-- The Android client never talks to the server directly.  
-- Only your server (BTCZWallet-win) holds and secures wallet data.
+- All communication is routed through **Tor**, ensuring that network metadata and connection endpoints
+  remain fully obfuscated from third parties and external observers.  
+
+- The Android client **never communicates directly** with any external server.  
+  All wallet operations occur through your own **BTCZWallet-win** instance running in a trusted environment.  
+
+- Only your local server (**BTCZWallet-win**) holds and secures wallet data —  
+  **private keys never leave the machine or traverse any network, not even as signed raw transactions.**  
+  This design completely eliminates exposure of key material, preventing any possibility for
+  remote attackers to intercept, reconstruct, or exploit sensitive wallet data.  
+
+- The result is a **zero-trust, zero-leak architecture**, where cryptographic integrity and
+  privacy are preserved end-to-end by design.
 
 
 Development
@@ -25,14 +39,25 @@ Clone the repo
     git clone https://github.com/yourusername/BTCZWallet-android.git
     cd BTCZWallet-android
 
-Create a virtual environment and install dependencies
+Create a virtual environment:
+
+Linux:
+
+    python3 -m venv env
+    source env/bin/activate
+    python3 -m pip install --upgrade pip
+
+Windows:
 
     python -m venv env
-    source env/bin/activate
+    ./env/scripts/activate
     python -m pip install --upgrade pip
+
+Install dependencies:
+
     pip install briefcase
 
-Build the Android APK
+Build the Android APK:
 
     briefcase create android
     briefcase build android
