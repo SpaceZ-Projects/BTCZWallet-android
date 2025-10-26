@@ -199,6 +199,7 @@ class Transactions(ScrollContainer):
         self.scroll_toggle = None
         self.transactions_toggle = None
         self.is_loading = None
+        self.is_active = None
 
         self.transactions_count = 20
         self.transactions_from = 0
@@ -214,7 +215,11 @@ class Transactions(ScrollContainer):
 
         self.content = self.transactions_box
 
-        self.app.loop.create_task(self.load_transactions())
+
+    def update_toggle(self):
+        if not self.transactions_toggle:
+            self.transactions_toggle = True
+            self.app.loop.create_task(self.load_transactions())
 
 
     def get_transactions(self, limit, offset):
@@ -245,7 +250,7 @@ class Transactions(ScrollContainer):
 
     async def update_transactions(self):
         while True:
-            if not self.transactions_toggle or self.is_loading:
+            if not self.is_active or self.is_loading:
                 await asyncio.sleep(1)
                 continue
             height = self.wallet_storage.get_info("height")

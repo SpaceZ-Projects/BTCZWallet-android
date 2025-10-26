@@ -15,7 +15,7 @@ from .storage import DeviceStorage
 
 
 class Mining(Box):
-    def __init__(self, app:App, main:MainWindow, script_path, utils, units):
+    def __init__(self, app:App, main:MainWindow, menu, script_path, utils, units):
         super().__init__(
             style=Pack(
                 direction = COLUMN,
@@ -27,6 +27,7 @@ class Mining(Box):
 
         self.app = app
         self.main = main
+        self.menu = menu
         self.script_path = script_path
         self.utils = utils
         self.units = units
@@ -34,6 +35,7 @@ class Mining(Box):
         self.device_storage = DeviceStorage(self.app)
 
         self.mining_toggle = None
+        self.is_active = None
 
         x = self.utils.screen_resolution()
         if 1200 < x <= 1600:
@@ -599,7 +601,7 @@ class Mining(Box):
         )
 
     
-    def run_mining_task(self):
+    def update_toggle(self):
         if not self.mining_toggle:
             self.mining_toggle = True
             self.app.loop.create_task(self.update_mining_stats())
@@ -607,6 +609,9 @@ class Mining(Box):
 
     async def update_mining_stats(self):
         while True:
+            if not self.is_active or not self.menu.server_status:
+                await asyncio.sleep(1)
+                continue
             device_auth = self.device_storage.get_auth()
             url = f'http://{device_auth[0]}/mining'
             result = await self.utils.make_request(device_auth[1], device_auth[2], url)

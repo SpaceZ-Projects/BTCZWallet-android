@@ -54,7 +54,7 @@ class Address(Box):
             style=Pack(
                 background_color=rgb(20,20,20),
                 height = icon_width,
-                padding=(10,0,0,5),
+                padding=(15,0,0,5),
                 alignment=CENTER
             )
         )
@@ -113,6 +113,7 @@ class AddressBook(Box):
         self.addresses_storage = AddressesStorage(self.app)
 
         self.book_toggle = None
+        self.is_active = None
         self.addresses_data = {}
 
         x = self.utils.screen_resolution()
@@ -280,7 +281,7 @@ class AddressBook(Box):
             )
 
 
-    def run_book_task(self):
+    def update_toggle(self):
         if not self.book_toggle:
             self.book_toggle = True
             self.app.loop.create_task(self.load_address_book())
@@ -301,8 +302,11 @@ class AddressBook(Box):
 
 
     async def update_address_book(self):
-        local_addresses = []
         while True:
+            if not self.is_active:
+                await asyncio.sleep(1)
+                continue
+            local_addresses = []
             address_book = self.addresses_storage.get_address_book()
             for data in address_book:
                 address = data[1]
@@ -317,8 +321,6 @@ class AddressBook(Box):
                 if address not in local_addresses:
                     existing_address = self.addresses_data[address]
                     self.book_list.remove(existing_address)
-
-            local_addresses.clear()
             
             await asyncio.sleep(5)
 

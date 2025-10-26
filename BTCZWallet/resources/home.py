@@ -32,7 +32,7 @@ class Home(Box):
         self.txs_storage = TxsStorage(self.app)
 
         self.transactions_data = {}
-        self.home_toggle = True
+        self.is_active = True
 
         x = self.utils.screen_resolution()
         if 1200 < x <= 1600:
@@ -314,6 +314,9 @@ class Home(Box):
     
     async def update_balances(self):
         while True:
+            if not self.is_active:
+                await asyncio.sleep(1)
+                continue
             _, currency, price = self.wallet_storage.get_info()
             wallet = self.wallet_storage.get_addresses()
             if wallet:
@@ -360,7 +363,7 @@ class Home(Box):
 
     async def update_transactions(self):
         while True:
-            if not self.home_toggle:
+            if not self.is_active:
                 await asyncio.sleep(1)
                 continue
             height = self.wallet_storage.get_info("height")

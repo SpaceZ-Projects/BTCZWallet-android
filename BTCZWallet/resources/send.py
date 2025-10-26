@@ -187,6 +187,8 @@ class Send(Box):
         self.device_storage = DeviceStorage(self.app)
         self.addresses_storage = AddressesStorage(self.app)
 
+        self.send_toggle = None
+        self.is_active = None
         self.book_toggle = None
 
         x = self.utils.screen_resolution()
@@ -495,12 +497,18 @@ class Send(Box):
             self.send_button
         )
 
-        self.app.loop.create_task(self.update_balance())
-
+    
+    def update_toggle(self):
+        if not self.send_toggle:
+            self.send_toggle = True
+            self.app.loop.create_task(self.update_balance())
 
 
     async def update_balance(self):
         while True:
+            if not self.is_active:
+                await asyncio.sleep(1)
+                continue
             if self.switch_type.value is False:
                 if self.main.tbalance:
                     self.current_balance_label.text = f"Balance : {self.units.format_balance(self.main.tbalance)}"
@@ -706,6 +714,7 @@ class Send(Box):
     def on_focus_change(self, v, has_focus):
         if has_focus:
             self.adjust_size()
-        
-        if not self.fee_input.value:
-            self.fee_input._impl.native.setText("0.00001000")
+        else:
+            value = self.fee_input._impl.native.getText().toString().strip()
+            if not value:
+                self.fee_input._impl.native.setText("0.00001000")
