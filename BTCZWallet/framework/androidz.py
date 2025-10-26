@@ -5,22 +5,24 @@ from collections import deque
 import threading
 
 from java import dynamic_proxy, cast, jclass
-from java.lang import Runnable
+from java.lang import Runnable, Boolean
 from java.util import Arrays
 from java.io import FileInputStream
 from android.app import AlertDialog, NotificationChannel, NotificationManager, PendingIntent
 from android.os import Build
 from android.net import Uri
-from android.util import Log
+from android.util import TypedValue, Log
 from android.view import View
-from android.content import ClipboardManager, ClipData, Intent, Context, ServiceConnection
+from android.view.inputmethod import InputMethodManager
+from android.content import ClipboardManager, ClipData, Intent, DialogInterface, Context, ServiceConnection
 from android.text import InputType
-from android.content.res import Configuration
+from android.content.res import Configuration, Resources
 from androidx.core.app import NotificationCompat, NotificationManagerCompat
 from androidx.documentfile.provider import DocumentFile
-from android.graphics import Point, Color
+from android.graphics import Point, Color, BitmapFactory, Paint
+from android.graphics.drawable import ColorDrawable, BitmapDrawable
 from androidx.activity.result import ActivityResultCallback
-from android.widget import Toast, RelativeLayout, LinearLayout, ImageView, ScrollView
+from android.widget import Toast, RelativeLayout, LinearLayout, ImageView, ScrollView, PopupMenu
 
 from org.beeware.android import MainActivity, IPythonApp, PortraitCaptureActivity
 
@@ -30,6 +32,7 @@ from com.journeyapps.barcodescanner import ScanOptions, ScanContract
 
 from toga import App
 from toga.constants import COLUMN, ROW
+
 
 
 class RunnableProxy(dynamic_proxy(Runnable)):
@@ -132,6 +135,8 @@ class SelectFolderDialog:
             self._future.set_result(folder_uri)
 
 
+
+
 class AppProxy(dynamic_proxy(IPythonApp)):
     def __init__(self):
         super().__init__()
@@ -186,6 +191,30 @@ class ClickListener(dynamic_proxy(View.OnClickListener)):
         result = self.callback(view)
         if asyncio.iscoroutine(result):
             App.app.loop.create_task(result)
+
+
+class LongClickListener(dynamic_proxy(View.OnLongClickListener)):
+    def __init__(self, callback):
+        super().__init__()
+        self.callback = callback
+
+    def onLongClick(self, v):
+        if callable(self.callback):
+            self.callback(v)
+        return True
+    
+
+class MenuClickListener(dynamic_proxy(PopupMenu.OnMenuItemClickListener)):
+    def __init__(self, callback):
+        super().__init__()
+        self.callback = callback
+
+    def onMenuItemClick(self, item):
+        title = item.getTitle()
+        if hasattr(title, "toString"):
+            title = title.toString()
+        self.callback(title)
+        return True
 
 
 class Notification:
@@ -255,30 +284,35 @@ class ToastMessage:
         toast.show()
 
 
-class CopyText():
-    def __init__(
-        self,
-        text
-    ):
-        super().__init__()
+class CopyText:
+    def __init__(self, text):
 
-        self.clipboard_manager = None
+        clipboard_manager = None
         context = App.app.current_window._impl.app.native
         clipboard_service = context.getSystemService(
             context.CLIPBOARD_SERVICE
         )
-        self.clipboard_manager = cast(
+        clipboard_manager = cast(
             ClipboardManager,
             clipboard_service
         )
         clip_data = ClipData.newPlainText("button", text)
-        self.clipboard_manager.setPrimaryClip(clip_data)
+        clipboard_manager.setPrimaryClip(clip_data)
         ToastMessage("Copied to clipboard")
 
 
-class RelativeDialog:
-    def __init__(self, activity, title=None, cancelable=True, top_space=40, bottom_space=40, view_space=0, scrollable=False):
+class OnCancelListener(dynamic_proxy(DialogInterface.OnCancelListener)):
+    def __init__(self, callback):
         super().__init__()
+        self.callback = callback
+
+    def onCancel(self, dialog):
+        if callable(self.callback):
+            self.callback()
+
+
+class RelativeDialog:
+    def __init__(self, activity, title=None, cancelable=True, top_space=40, bottom_space=40, view_space=0, scrollable=False, on_cancel=None):
 
         self.activity = activity
         self.dialog = None
@@ -286,6 +320,7 @@ class RelativeDialog:
         self.bottom_space = bottom_space
         self.view_space = view_space
         self.scrollable = scrollable
+        self._on_cancel = on_cancel
 
         builder = AlertDialog.Builder(activity)
         builder.setCancelable(cancelable)
@@ -303,9 +338,20 @@ class RelativeDialog:
             builder.setView(self.layout)
 
         self.dialog = builder.create()
+        self.dialog.setOnCancelListener(
+            OnCancelListener(lambda: self._handle_cancel())
+        )
         self.last_view_id = 0
         self.view_map = {}
         self.view_order = []
+
+    @property
+    def cancelable(self) -> bool:
+        return self.dialog.isCancelable()
+
+    @cancelable.setter
+    def cancelable(self, value: bool):
+        self.dialog.setCancelable(bool(value))
 
     def _convert_box(self, box):
         direction = getattr(box.style, "direction", COLUMN)
@@ -437,11 +483,16 @@ class RelativeDialog:
         self._apply_margins()
 
     def show(self):
+        self.dialog.getWindow().setBackgroundDrawable(ColorDrawable(Color.parseColor("#202225")))
         self.activity.runOnUiThread(RunnableProxy(self.dialog.show))
 
     def hide(self):
         if self.dialog and self.dialog.isShowing():
             self.activity.runOnUiThread(RunnableProxy(self.dialog.dismiss))
+
+    def _handle_cancel(self):
+        if self._on_cancel:
+            self.activity.runOnUiThread(RunnableProxy(lambda: self._on_cancel()))
 
 
 
@@ -507,4 +558,3 @@ class TorController:
             Log.i(self.TAG, "Tor stopped")
         except Exception as e:
             Log.e(self.TAG, f"Error stopping Tor: {e}")       
-

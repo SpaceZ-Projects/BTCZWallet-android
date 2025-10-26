@@ -2,9 +2,11 @@
 import asyncio
 import json
 
-from toga import App, MainWindow, OptionContainer, OptionItem, Box
-from toga.colors import RED, GREENYELLOW
+from toga import (
+    App, MainWindow, OptionContainer, OptionItem, Box
+)
 from ..framework import ToastMessage
+from toga.colors import RED, GREENYELLOW, YELLOW, GRAY
 
 from .home import Home
 from .receive import Receive
@@ -12,7 +14,11 @@ from .send import Send
 from .txs import Transactions
 from .book import AddressBook
 from .mining import Mining
-from .storage import WalletStorage, DeviceStorage, TxsStorage, AddressesStorage
+from .messages import Messages
+from .storage import (
+    WalletStorage, DeviceStorage, TxsStorage, AddressesStorage,
+    MessagesStorage
+)
 
 
 class Menu(OptionContainer):
@@ -69,6 +75,7 @@ class Menu(OptionContainer):
         self.wallet_storage = WalletStorage(self.app)
         self.txs_storage = TxsStorage(self.app)
         self.addresses_storage = AddressesStorage(self.app)
+        self.messages_storage = MessagesStorage(self.app)
 
         self.on_select = self.update_current_tab
         self.app.proxy._back_callback = self.on_back_pressed
@@ -77,6 +84,8 @@ class Menu(OptionContainer):
         self.server_status = None
         self.switch_toggle = None
         self.more_toggle = None
+        self.read_messages = []
+        self.unread_messages = []
 
         self.book_page = AddressBook(self.app, self.main, self.script_path, self.utils, self.units)
         self.book_option = OptionItem(
@@ -85,11 +94,18 @@ class Menu(OptionContainer):
             icon=f"{script_path}/images/book.png"
         )
 
-        self.mining_page = Mining(self.app, self.main, self.script_path, self.utils, self.units)
+        self.mining_page = Mining(self.app, self.main, self, self.script_path, self.utils, self.units)
         self.mining_option = OptionItem(
             text="Mining",
             content=self.mining_page,
             icon=f"{script_path}/images/mining.png"
+        )
+
+        self.messages_page = Messages(self.app, self.main, self, self.script_path, self.utils, self.units)
+        self.messages_option = OptionItem(
+            text="Messages",
+            content=self.messages_page,
+            icon=f"{script_path}/images/messages.png"
         )
 
         self.app.loop.create_task(self.check_network())
@@ -99,25 +115,44 @@ class Menu(OptionContainer):
         await asyncio.sleep(0.1)
         current_tab = self.current_tab.text
         if current_tab == "Home":
-            self.home_page.home_toggle = True
-            self.reload_transactions()
+            self.home_page.is_active = True
+        elif current_tab == "Send":
+            self.send_page.is_active = True
+            self.send_page.update_toggle()
         elif current_tab == "Txs":
-            self.home_page.home_toggle = None
-            self.transactions_page.transactions_toggle = True
+            self.transactions_page.is_active = True
+            self.transactions_page.update_toggle()
         elif current_tab == "More":
             self.more_toggle = True
             self.app.loop.create_task(self._on_more_click())
-            self.reload_transactions()
         elif current_tab == "Back":
             self.more_toggle = None
             self.app.loop.create_task(self._on_back_click())
         elif current_tab == "Book":
-            self.book_page.run_book_task()
+            self.book_page.is_active = True
+            self.book_page.update_toggle()
         elif current_tab == "Mining":
-            self.mining_page.run_mining_task()
-        else:
-            self.home_page.home_toggle = None
-            self.reload_transactions()
+            self.mining_page.is_active = True
+            self.mining_page.update_toggle()
+        elif current_tab == "Messages":
+            self.messages_page.is_active = True
+            self.messages_page.update_toggle()
+
+        if current_tab != "Home":
+            self.home_page.is_active = None
+        if current_tab != "Send":
+            self.send_page.is_active = None
+        if current_tab != "Txs":
+            self.transactions_page.is_active = None
+        if current_tab != "Book":
+            self.book_page.is_active = None
+        if current_tab != "Mining":
+            self.mining_page.is_active = None
+        if current_tab != "Messages":
+            self.messages_page.is_active = None
+            if self.messages_page.chat.contacts_toggle:
+                self.messages_page.chat.hide_contacts_list()
+
 
     async def _on_more_click(self):
         self.switch_toggle = True
@@ -132,6 +167,7 @@ class Menu(OptionContainer):
         self.current_tab = self.book_option
         self.content.remove(self.transactions_option)
         self.content.append(self.mining_option)
+        self.content.append(self.messages_option)
         self.switch_options.icon = f"{self.script_path}/images/back.png"
         self.switch_options.text = "Back"
         self.current_tab = self.book_option
@@ -143,6 +179,7 @@ class Menu(OptionContainer):
         self.switch_toggle = True
         self._impl.native.setClickable(False)
         self._impl.native.setEnabled(False)
+        self.content.remove(self.messages_option)
         self.content.remove(self.mining_option)
         self.content.remove(self.book_option)
         self.content.append(self.home_option)
@@ -179,8 +216,12 @@ class Menu(OptionContainer):
                     message="Are you sure you want exit the app",
                     on_result=on_result
                 )
-            elif self.send_page.book_toggle:
+            elif current_tab == "Send" and self.send_page.book_toggle:
                 self.send_page.hide_address_book()
+
+            elif current_tab == "Messages" and self.messages_page.chat.contacts_toggle:
+                self.messages_page.chat.hide_contacts_list()
+            
             elif self.more_toggle:
                 self.more_toggle = None
                 self.current_tab = self.switch_options
@@ -195,10 +236,13 @@ class Menu(OptionContainer):
                 await asyncio.sleep(30)
                 self.app.loop.create_task(self.check_network())
 
+        self.home_page.update_status("Connecting...", GRAY)
         if await self.utils.is_tor_alive():
             self.app.loop.create_task(self.check_addresses())
+            self.app.loop.create_task(self.check_messages_identity())
         else:
             await asyncio.sleep(1)
+            self.home_page.update_status("Failed", YELLOW)
             self.main.error_dialog(
                 title="Tor Network Error",
                 message="Failed to connect to the Tor network, ensure Tor is running and accessible",
@@ -216,7 +260,7 @@ class Menu(OptionContainer):
             device_auth = self.device_storage.get_auth()
             url = f'http://{device_auth[0]}/addresses'
             result = await self.utils.make_request(device_auth[1], device_auth[2], url)
-            if not result or "error" in result:
+            if not result:
                 self.main.error_dialog(
                     title="Connection Failed",
                     message="Failed to connect to the server",
@@ -232,6 +276,34 @@ class Menu(OptionContainer):
             self.wallet_storage.insert_addresses(transparent, shielded, balance, balance)
             self.receive_page.show_qr("transparent")
             
+        
+    async def check_messages_identity(self):
+        async def on_result(widget, result):
+            if result is None:
+                await asyncio.sleep(1)
+                self.app.loop.create_task(self.check_messages_identity())
+
+        identity = self.messages_storage.get_identity()
+        if not identity:
+            device_auth = self.device_storage.get_auth()
+            url = f'http://{device_auth[0]}/contacts'
+            params = {"get": "identity"}
+            result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
+            if not result:
+                self.main.error_dialog(
+                    title="Connection Failed",
+                    message="Failed to connect to the server",
+                    on_result=on_result
+                )
+                return
+            
+            elif result and "data" in result:
+                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+                result = json.loads(decrypted)
+                address = result.get('address')
+                self.messages_storage.insert_identity(address)
+
+        self.messages_page.load_chat()
         self.run_tasks()
 
 
@@ -240,10 +312,13 @@ class Menu(OptionContainer):
         self.app.loop.create_task(self.update_balances())
         self.app.loop.create_task(self.update_transactions())
         self.app.loop.create_task(self.update_address_book())
+        self.app.loop.create_task(self.update_contacts())
 
 
     async def update_server_status(self):
         while True:
+            if not self.server_status:
+                self.home_page.update_status("Connecting...", GRAY)
             device_auth = self.device_storage.get_auth()
             url = f'http://{device_auth[0]}/status'
             result = await self.utils.make_request(device_auth[1], device_auth[2], url)
@@ -256,11 +331,11 @@ class Menu(OptionContainer):
                 decrypted = self.units.decrypt_data(device_auth[2], result["data"])
                 result = json.loads(decrypted)
                 version = result.get('version')
-                min_version = (1, 4, 6)
+                min_version = (1, 4, 9)
                 if not version:
                     self.main.error_dialog(
                         title="Update Required",
-                        message=f"Server version is too old. Please update to at least 1.4.6"
+                        message=f"Server version is too old. Please update to at least 1.4.9"
                     )
                     self.server_status = None
                     status = "Offline"
@@ -280,7 +355,7 @@ class Menu(OptionContainer):
                         if version_tuple < min_version:
                             self.main.error_dialog(
                                 title="Update Required",
-                                message=f"Server version {version} is too old. Please update to at least 1.4.6"
+                                message=f"Server version {version} is too old. Please update to at least 1.4.9"
                             )
                             self.server_status = None
                             status = "Offline"
@@ -372,6 +447,55 @@ class Menu(OptionContainer):
                 for address in address_book:
                     if address not in server_addresses:
                         self.addresses_storage.delete_address_book(address)
+
+            await asyncio.sleep(10)
+
+
+    async def update_contacts(self):
+        while True:
+            if not self.server_status or not self.messages_storage.get_identity():
+                await asyncio.sleep(1)
+                continue
+            device_auth = self.device_storage.get_auth()
+            url = f'http://{device_auth[0]}/contacts'
+            params = {"get": "contacts"}
+            result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
+            if result and "data" in result:
+                server_contacts = []
+                contacts = self.messages_storage.get_contacts("contact_id")
+                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+                result = json.loads(decrypted)
+                for data in result:
+                    category = data.get('category')
+                    contact_id = data.get('contact_id')
+                    username = data.get('username')
+                    server_contacts.append(contact_id)
+                    if contact_id not in contacts:
+                        self.messages_storage.add_contact(category, contact_id, username)
+
+                for id in contacts:
+                    if id not in server_contacts:
+                        self.messages_storage.delete_contact(id)
+
+            params = {"get": "pending"}
+            result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
+            if result and "data" in result:
+                server_pending = []
+                pending = self.messages_storage.get_pending("id")
+                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+                result = json.loads(decrypted)
+                for data in result:
+                    category = data.get('category')
+                    contact_id = data.get('contact_id')
+                    username = data.get('username')
+                    server_pending.append(contact_id)
+                    if contact_id not in pending:
+                        self.messages_storage.add_pending(category, contact_id, username)
+                        self.app.notify.show(f"New Request", username)
+
+                for id in pending:
+                    if id not in server_pending:
+                        self.messages_storage.delete_pending(id)
 
             await asyncio.sleep(10)
 

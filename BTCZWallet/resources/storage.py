@@ -324,6 +324,303 @@ class WalletStorage:
 
 
 
+class MessagesStorage:
+    def __init__(self, app:App):
+        super().__init__()
+
+        self.app = app
+        if not os.path.exists(self.app.paths.data):
+            os.makedirs(self.app.paths.data)
+        self.data = os.path.join(self.app.paths.data, 'messages.dat')
+
+
+    def create_identity_table(self):
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS identity (
+                address TEXT
+            )
+            '''
+        )
+        conn.commit()
+        conn.close()
+
+
+    def create_contacts_table(self):
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS contacts (
+                category TEXT,
+                contact_id TEXT,
+                username TEXT
+            )
+            '''
+        )
+        conn.commit()
+        conn.close()
+
+
+    def create_pending_table(self):
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS pending (
+                category TEXT,
+                id TEXT,
+                username TEXT
+            )
+            '''
+        )
+        conn.commit()
+        conn.close()
+
+
+    def create_messages_table(self):
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS messages (
+                id TEXT,
+                author TEXT,
+                message TEXT,
+                amount REAL,
+                timestamp INTEGER
+            )
+            '''
+        )
+        conn.commit()
+        conn.close()
+
+    def create_unread_messages_table(self):
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS unread_messages (
+                id TEXT,
+                author TEXT,
+                message TEXT,
+                amount REAL,
+                timestamp INTEGER
+            )
+            '''
+        )
+        conn.commit()
+        conn.close()
+
+
+    def insert_identity(self, address):
+        self.create_identity_table()
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            INSERT INTO identity (address)
+            VALUES (?)
+            ''', 
+            (address,)
+        )
+        conn.commit()
+        conn.close()
+
+
+    def get_identity(self):
+        try:
+            conn = sqlite3.connect(self.data)
+            cursor = conn.cursor()
+            cursor.execute('SELECT address FROM identity')
+            data = cursor.fetchone()
+            conn.close()
+            return data[0]
+        except sqlite3.OperationalError:
+            return None
+        
+
+    def add_contact(self, category, contact_id, username):
+        self.create_contacts_table()
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            INSERT INTO contacts (category, contact_id, username)
+            VALUES (?, ?, ?)
+            ''',
+            (category, contact_id, username)
+        )
+        conn.commit()
+        conn.close()
+
+
+    def add_pending(self, category, id, username):
+        self.create_pending_table()
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            INSERT INTO pending (category, id, username)
+            VALUES (?, ?, ?)
+            ''',
+            (category, id, username)
+        )
+        conn.commit()
+        conn.close()
+
+
+    def message(self, id, author, message, amount, timestamp):
+        self.create_messages_table()
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            INSERT INTO messages (id, author, message, amount, timestamp)
+            VALUES (?, ?, ?, ?, ?)
+            ''', 
+            (id, author, message, amount, timestamp)
+        )
+        conn.commit()
+        conn.close()
+
+
+    def unread_message(self, id, author, message, amount, timestamp):
+        self.create_unread_messages_table()
+        conn = sqlite3.connect(self.data)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            INSERT INTO unread_messages (id, author, message, amount, timestamp)
+            VALUES (?, ?, ?, ?, ?)
+            ''', 
+            (id, author, message, amount, timestamp)
+        )
+        conn.commit()
+        conn.close()
+
+
+    def get_contacts(self, option = None):
+        try:
+            conn = sqlite3.connect(self.data)
+            cursor = conn.cursor()
+            if option == "contact_id":
+                cursor.execute('SELECT contact_id FROM contacts')
+                contacts = [row[0] for row in cursor.fetchall()]
+            elif option is None:
+                cursor.execute('SELECT * FROM contacts')
+                contacts = cursor.fetchall()
+            conn.close()
+            return contacts
+        except sqlite3.OperationalError:
+            return []
+        
+
+    def get_pending(self, option = None):
+        try:
+            conn = sqlite3.connect(self.data)
+            cursor = conn.cursor()
+            if option == "id":
+                cursor.execute("SELECT id FROM pending")
+                contacts = [row[0] for row in cursor.fetchall()]
+            elif option is None:
+                cursor.execute('SELECT * FROM pending')
+                contacts = cursor.fetchall()
+            conn.close()
+            return contacts
+        except sqlite3.OperationalError:
+            return []
+        
+
+    def get_messages(self, contact_id = None):
+        try:
+            conn = sqlite3.connect(self.data)
+            cursor = conn.cursor()
+            if contact_id:
+                cursor.execute(
+                    'SELECT author, message, amount, timestamp FROM messages WHERE id = ?',
+                    (contact_id,)
+                )
+                messages = cursor.fetchall()
+            else:
+                cursor.execute('SELECT timestamp FROM messages')
+                messages = [row[0] for row in cursor.fetchall()]
+            conn.close()
+            return messages
+        except sqlite3.OperationalError:
+            return []
+        
+
+    def get_unread_messages(self, contact_id=None):
+        try:
+            conn = sqlite3.connect(self.data)
+            cursor = conn.cursor()
+            if contact_id:
+                cursor.execute(
+                    'SELECT author, message, amount, timestamp FROM unread_messages WHERE id = ?',
+                    (contact_id,)
+                )
+                messages = cursor.fetchall()
+            else:
+                cursor.execute('SELECT timestamp FROM unread_messages')
+                messages = [row[0] for row in cursor.fetchall()]
+            conn.close()
+            return messages
+        except sqlite3.OperationalError:
+            return []
+
+
+    def delete_contact(self, contact_id):
+        try:
+            conn = sqlite3.connect(self.data)
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                DELETE FROM contacts WHERE contact_id = ?
+                ''', 
+                (contact_id,)
+            )
+            conn.commit()
+            conn.close()
+        except sqlite3.OperationalError as e:
+            print(f"Error deleting contact: {e}")
+
+
+    def delete_pending(self, id):
+        try:
+            conn = sqlite3.connect(self.data)
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                DELETE FROM pending WHERE id = ?
+                ''', 
+                (id,)
+            )
+            conn.commit()
+            conn.close()
+        except sqlite3.OperationalError as e:
+            print(f"Error deleting pending contact: {e}")
+
+
+    def delete_unread(self, contact_id):
+        try:
+            conn = sqlite3.connect(self.data)
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                DELETE FROM unread_messages WHERE id = ?
+                ''', 
+                (contact_id,)
+            )
+            conn.commit()
+            conn.close()
+        except sqlite3.OperationalError as e:
+            print(f"Error deleting request: {e}")
+
+
+
 class DeviceStorage:
     def __init__(self, app:App):
         super().__init__()
