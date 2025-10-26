@@ -2,10 +2,13 @@
 import asyncio
 from pathlib import Path
 
-from toga import App, MainWindow, Box, ImageView, Label, Button, ScrollContainer
+from toga import (
+    App, MainWindow, Box, ImageView, Label, Button,
+    ScrollContainer, ProgressBar
+)
 from .framework import (
     MainActivity, AppProxy, QRScanner, SelectFolderDialog,
-    Notification
+    Notification, TorController
 )
 from toga.style.pack import Pack
 from toga.constants import COLUMN, CENTER, BOLD, ROW
@@ -18,10 +21,9 @@ from .resources import (
 
 
 class BitcoinZGUI(MainWindow):
-    def __init__(self, proxy):
+    def __init__(self):
         super().__init__()
 
-        self.proxy = proxy
         version = self.app.version
 
         self.units = Units()
@@ -123,7 +125,7 @@ class BitcoinZGUI(MainWindow):
         )
 
         self.tor_button = Button(
-            text="",
+            text="Mobile Server",
             style=Pack(
                 color=BLACK,
                 background_color = GRAY,
@@ -134,6 +136,26 @@ class BitcoinZGUI(MainWindow):
             ),
             enabled=False,
             on_press=self.show_tor_window
+        )
+
+        self.tor_progress = ProgressBar(
+            max=100,
+            value=0,
+            style=Pack(
+                flex = 1,
+                padding = (20,0,0,10)
+            )
+        )
+
+        self.tor_progress_label = Label(
+            text="0%",
+            style=Pack(
+                color=YELLOW,
+                background_color=rgb(40,43,48),
+                font_size=text_size,
+                text_align=CENTER,
+                padding = (15,15,0,15)
+            )
         )
 
         self.tor_box = Box(
@@ -147,7 +169,7 @@ class BitcoinZGUI(MainWindow):
         self.main_scroll.content = self.main_box
 
         self.show_wizard()
-        self.app.loop.create_task(self.verify_tor_network())
+        
 
 
     def show_wizard(self):
@@ -162,24 +184,33 @@ class BitcoinZGUI(MainWindow):
         )
         self.tor_box.add(
             self.tor_icon,
-            self.tor_button
+            self.tor_progress,
+            self.tor_progress_label
         )
+
+        self.app.loop.create_task(self.verify_tor_network())
 
 
     async def verify_tor_network(self):
-        self.tor_button.text = "Waiting Tor..."
         while True:
-            if self.proxy.isRunning():
+            progress = self.app.controller.progress
+            self.tor_progress.value = progress
+            self.tor_progress_label.text = f"{progress}%"
+            if self.app.controller.progress == 100:
                 await self.check_device_account()
                 return
-            await asyncio.sleep(5)
+            await asyncio.sleep(0.1)
 
     
     async def check_device_account(self):
-        self.tor_button.text = "Mobile Server"
+        self.tor_box.remove(
+            self.tor_progress,
+            self.tor_progress_label
+        )
+        self.tor_box.add(self.tor_button)
+        await asyncio.sleep(1)
         device_auth = self.device_storage.get_auth()
         if device_auth:
-            await asyncio.sleep(1)
             self.app.main_window.content = Menu(
                 self.app, self, self.script_path, self.utils, self.units
             )
@@ -208,21 +239,21 @@ class BitcoinZWallet(App):
         self.proxy._back_callback = self.on_back_pressed
         self.activity = MainActivity.singletonThis
         self.notify = Notification(self.activity)
-        
+        self.controller = TorController(self.activity)
         self.window_toggle = None
 
 
     def startup(self):
         MainActivity.setPythonApp(self.proxy)
-        self.main_window = BitcoinZGUI(self.proxy)
-        self.proxy.startTor()
+        self.main_window = BitcoinZGUI()
+        self.controller.start_tor()
         self.main_window.show()
 
 
     def on_back_pressed(self):
         def on_result(widget, result):
             if result is True:
-                self.proxy.stopTor()
+                self.controller.stop_tor()
                 self.proxy.Exit()
         if self.window_toggle:
             self.main_window.main_box.clear()

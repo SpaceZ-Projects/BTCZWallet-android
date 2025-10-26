@@ -168,6 +168,7 @@ class Menu(OptionContainer):
     def on_back_pressed(self):
         def on_result(widget, result):
             if result is True:
+                self.app.controller.stop_tor()
                 self.app.proxy.Exit()
 
         if not self.switch_toggle:

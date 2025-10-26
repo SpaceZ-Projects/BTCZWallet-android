@@ -2,6 +2,7 @@
 import asyncio
 import time
 from collections import deque
+import threading
 
 from java import dynamic_proxy, cast, jclass
 from java.lang import Runnable
@@ -10,8 +11,9 @@ from java.io import FileInputStream
 from android.app import AlertDialog, NotificationChannel, NotificationManager, PendingIntent
 from android.os import Build
 from android.net import Uri
+from android.util import Log
 from android.view import View
-from android.content import ClipboardManager, ClipData, Intent
+from android.content import ClipboardManager, ClipData, Intent, Context, ServiceConnection
 from android.text import InputType
 from android.content.res import Configuration
 from androidx.core.app import NotificationCompat, NotificationManagerCompat
@@ -19,7 +21,10 @@ from androidx.documentfile.provider import DocumentFile
 from android.graphics import Point, Color
 from androidx.activity.result import ActivityResultCallback
 from android.widget import Toast, RelativeLayout, LinearLayout, ImageView, ScrollView
-from org.beeware.android import MainActivity, IPythonApp, PortraitCaptureActivity, TorController
+
+from org.beeware.android import MainActivity, IPythonApp, PortraitCaptureActivity
+
+from org.torproject.jni import TorService
 
 from com.journeyapps.barcodescanner import ScanOptions, ScanContract
 
@@ -137,7 +142,7 @@ class AppProxy(dynamic_proxy(IPythonApp)):
         self._back_callback = None
         self._qr_callback = None
         self._config_changed_callback = None
-              
+        
 
     def onBackPressed(self):
         if self._back_callback:
@@ -156,24 +161,6 @@ class AppProxy(dynamic_proxy(IPythonApp)):
             except Exception as e:
                 print("Configuration change callback error:", e)
 
-    def startTor(self):
-        try:
-            self.tor_controller.startTor()
-        except Exception as e:
-            return None
-
-    def stopTor(self):
-        try:
-            self.tor_controller.stopTor()
-        except Exception as e:
-            return None
-
-    def isRunning(self):
-        try:
-            return self.tor_controller.isRunning()
-        except Exception as e:
-            return None
-    
     def Restart(self):
         MainActivity.singletonThis.Restart()
 
@@ -455,3 +442,69 @@ class RelativeDialog:
     def hide(self):
         if self.dialog and self.dialog.isShowing():
             self.activity.runOnUiThread(RunnableProxy(self.dialog.dismiss))
+
+
+
+class TorController:
+    TAG = "TorController"
+
+    def __init__(self, activity):
+        self.context = activity.getApplicationContext()
+        self.torService = None
+        self.isRunning = False
+        self._connection = None
+        self.progress = 0
+
+    def start_tor(self):
+        try:
+            intent = Intent(self.context, TorService)
+            class MyConnection(dynamic_proxy(ServiceConnection)):
+                def onServiceConnected(_self, name, service):
+                    self.torService = service.getService()
+
+                    def wait_for_connection():
+                        conn = self.torService.getTorControlConnection()
+                        while True:
+                            try:
+                                status = conn.getInfo("status/bootstrap-phase")
+                            except Exception:
+                                time.sleep(0.1)
+                                continue
+                            if status:
+                                try:
+                                    progress_str = status.split("PROGRESS=")[1].split(" ")[0]
+                                    percent = int(progress_str)
+                                except Exception:
+                                    percent = 0
+
+                                self.progress = percent
+                                if percent >= 100:
+                                    self.isRunning = True
+                                    Log.i(self.TAG, "Tor fully bootstrapped")
+                                    break
+                            time.sleep(0.1)
+
+                    threading.Thread(target=wait_for_connection, daemon=True).start()
+
+                def onServiceDisconnected(_self, name):
+                    self.torService = None
+                    self.isRunning = False
+
+            self._connection = MyConnection()
+            self.context.bindService(intent, self._connection, Context.BIND_AUTO_CREATE)
+            Log.i(self.TAG, "Tor starting...")
+
+        except Exception as e:
+            Log.e(self.TAG, f"Error starting Tor: {e}")
+
+    def stop_tor(self):
+        try:
+            if self.torService and self._connection:
+                self.context.unbindService(self._connection)
+                self.torService = None
+                self._connection = None
+                self.isRunning = False
+            Log.i(self.TAG, "Tor stopped")
+        except Exception as e:
+            Log.e(self.TAG, f"Error stopping Tor: {e}")       
+
