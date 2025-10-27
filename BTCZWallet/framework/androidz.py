@@ -2,14 +2,13 @@
 import asyncio
 import time
 from collections import deque
-import threading
 
 from java import dynamic_proxy, cast, jclass
 from java.lang import Runnable, Boolean
 from java.util import Arrays
 from java.io import FileInputStream
 from android.app import AlertDialog, NotificationChannel, NotificationManager, PendingIntent
-from android.os import Build
+from android.os import Build, Handler
 from android.net import Uri
 from android.util import TypedValue, Log
 from android.view import View
@@ -501,6 +500,7 @@ class TorController:
 
     def __init__(self, activity):
         self.context = activity.getApplicationContext()
+        self.handler = Handler()
         self.torService = None
         self.isRunning = False
         self._connection = None
@@ -514,13 +514,13 @@ class TorController:
                     self.torService = service.getService()
 
                     def wait_for_connection():
-                        conn = self.torService.getTorControlConnection()
-                        while True:
-                            try:
-                                status = conn.getInfo("status/bootstrap-phase")
-                            except Exception:
-                                time.sleep(0.1)
-                                continue
+                        try:
+                            conn = self.torService.getTorControlConnection()
+                            if conn is None:
+                                self.handler.postDelayed(RunnableProxy(wait_for_connection), 100)
+                                return
+
+                            status = conn.getInfo("status/bootstrap-phase")
                             if status:
                                 try:
                                     progress_str = status.split("PROGRESS=")[1].split(" ")[0]
@@ -532,14 +532,19 @@ class TorController:
                                 if percent >= 100:
                                     self.isRunning = True
                                     Log.i(self.TAG, "Tor fully bootstrapped")
-                                    break
-                            time.sleep(0.1)
+                                    return
+                            self.handler.postDelayed(RunnableProxy(wait_for_connection), 100)
 
-                    threading.Thread(target=wait_for_connection, daemon=True).start()
+                        except Exception as e:
+                            Log.e(self.TAG, f"Tor progress error: {e}")
+                            self.handler.postDelayed(RunnableProxy(wait_for_connection), 100)
+
+                    self.handler.post(RunnableProxy(wait_for_connection))
 
                 def onServiceDisconnected(_self, name):
                     self.torService = None
                     self.isRunning = False
+                    Log.i(self.TAG, "Tor service disconnected")
 
             self._connection = MyConnection()
             self.context.bindService(intent, self._connection, Context.BIND_AUTO_CREATE)
@@ -555,6 +560,7 @@ class TorController:
                 self.torService = None
                 self._connection = None
                 self.isRunning = False
+                self.handler.removeCallbacksAndMessages(None)
             Log.i(self.TAG, "Tor stopped")
         except Exception as e:
             Log.e(self.TAG, f"Error stopping Tor: {e}")       

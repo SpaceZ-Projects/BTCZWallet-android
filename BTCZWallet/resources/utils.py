@@ -16,10 +16,9 @@ from aiohttp_socks import ProxyConnector, ProxyConnectionError, ProxyError
 
 
 class Utils:
-    def __init__(self, app:App, activity, units):
+    def __init__(self, app:App, units):
 
         self.app = app
-        self.activity = activity
         self.units = units
 
         if not os.path.exists(self.app.paths.cache):
@@ -32,8 +31,8 @@ class Utils:
         return width
 
     def screen_resolution(self):
-        configuration = self.activity.getResources().getConfiguration()
-        window_manager = self.activity.getWindowManager()
+        configuration = self.app.activity.getResources().getConfiguration()
+        window_manager = self.app.activity.getWindowManager()
         display = window_manager.getDefaultDisplay()
         size = Point()
         display.getRealSize(size)

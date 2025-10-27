@@ -27,7 +27,7 @@ class BitcoinZGUI(MainWindow):
         version = self.app.version
 
         self.units = Units()
-        self.utils = Utils(self.app, self.app.activity, self.units)
+        self.utils = Utils(self.app, self.units)
         self.device_storage = DeviceStorage(self.app)
         self.qr_scanner = QRScanner(self.app.activity)
         self.select_folder = SelectFolderDialog(self.app.activity)
@@ -246,8 +246,10 @@ class BitcoinZWallet(App):
     def startup(self):
         MainActivity.setPythonApp(self.proxy)
         self.main_window = BitcoinZGUI()
-        self.controller.start_tor()
         self.main_window.show()
+
+    def on_running(self):
+        self.controller.start_tor()
 
 
     def on_back_pressed(self):
