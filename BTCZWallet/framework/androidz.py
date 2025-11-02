@@ -2,11 +2,12 @@
 import asyncio
 import time
 from collections import deque
+import os
 
 from java import dynamic_proxy, cast, jclass
 from java.lang import Runnable, Boolean
 from java.util import Arrays
-from java.io import FileInputStream
+from java.io import FileInputStream, File
 from android.app import AlertDialog, NotificationChannel, NotificationManager, PendingIntent
 from android.os import Build, Handler
 from android.net import Uri
@@ -21,6 +22,7 @@ from androidx.documentfile.provider import DocumentFile
 from android.graphics import Point, Color, BitmapFactory, Paint
 from android.graphics.drawable import ColorDrawable, BitmapDrawable
 from androidx.activity.result import ActivityResultCallback
+from androidx.core.content import FileProvider
 from android.widget import Toast, RelativeLayout, LinearLayout, ImageView, ScrollView, PopupMenu
 
 from org.beeware.android import MainActivity, IPythonApp, PortraitCaptureActivity
@@ -93,6 +95,42 @@ class QRScanner:
 
         if self._future and not self._future.done():
             self._future.set_result(contents)
+
+
+
+class FileShare:
+    def __init__(self, activity):
+        self.context = activity.getApplicationContext()
+        self.package_name = self.context.getPackageName()
+        self.fileprovider_authority = f"{self.package_name}.fileprovider"
+
+    def share(self, file_path: str, text=None, mime_type="image/png", chooser_title="Share Qr Code"):
+        if not file_path or not os.path.exists(file_path):
+            ToastMessage("File does not exist to share")
+            return False
+
+        try:
+            file = File(file_path)
+            uri = FileProvider.getUriForFile(self.context, self.fileprovider_authority, file)
+
+            intent = Intent()
+            intent.setAction(Intent.ACTION_SEND)
+            intent.setType(mime_type)
+            intent.putExtra(Intent.EXTRA_STREAM, uri)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+            if text:
+                intent.putExtra(Intent.EXTRA_TEXT, text)
+
+            chooser = Intent.createChooser(intent, chooser_title)
+            chooser.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            self.context.startActivity(chooser)
+            return True
+
+        except Exception as e:
+            ToastMessage(f"Error sharing file: {e}")
+            print("Error sharing file:", e)
+            return False
 
 
 

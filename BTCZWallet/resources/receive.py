@@ -4,7 +4,7 @@ import os
 from toga import App, MainWindow, Box, Button, ImageView, MultilineTextInput
 from ..framework import (
     CopyText, ToastMessage, Uri, DocumentFile,
-    FileInputStream
+    FileInputStream, FileShare
 )
 from toga.style.pack import Pack
 from toga.constants import COLUMN, ROW, CENTER, BOLD
@@ -29,6 +29,9 @@ class Receive(Box):
         self.utils = utils
 
         self.wallet_storage = WalletStorage(self.app)
+        self.fileshare = FileShare(self.app.activity)
+
+        self._qr_image = None
 
         x = self.utils.screen_resolution()
         if 1200 < x <= 1600:
@@ -80,7 +83,7 @@ class Receive(Box):
             style=Pack(
                 direction=ROW,
                 background_color = rgb(40,43,48),
-                padding = (0,0,20,0)
+                padding = (0,5,20,5)
             )
         )
 
@@ -129,6 +132,17 @@ class Receive(Box):
             on_press=self.save_qr
         )
 
+        self.share_button = Button(
+            text="Share",
+            style=Pack(
+                color=BLACK,
+                background_color=GREENYELLOW,
+                font_size=text_size,
+                width=qr_button
+            ),
+            on_press=self.share_qr
+        )
+
         self.qr_bottons_box = Box(
             style=Pack(
                 direction=ROW,
@@ -160,7 +174,8 @@ class Receive(Box):
         )
         self.qr_bottons_box.add(
             self.save_button,
-            self.copy_button
+            self.copy_button,
+            self.share_button
         )
 
         self.show_qr("transparent")
@@ -170,9 +185,9 @@ class Receive(Box):
         wallet = self.wallet_storage.get_addresses(address_type)
         if wallet:
             self.address = wallet[0]
-            self.qr_image = self.utils.qr_generate(self.address)
-            if self.qr_image:
-                self.qr_view.image = self.qr_image
+            self._qr_image = self.utils.qr_generate(self.address)
+            if self._qr_image:
+                self.qr_view.image = self._qr_image
                 self.address_output.value = self.address
 
 
@@ -236,6 +251,12 @@ class Receive(Box):
             ToastMessage(f"Saved to {filename}")
         except Exception as e:
             ToastMessage(f"Error saving file: {e}")
+
+
+    def share_qr(self, button):
+        self.fileshare.share(
+            self._qr_image, text=self.address
+        )
 
 
     async def copy_address(self, button):

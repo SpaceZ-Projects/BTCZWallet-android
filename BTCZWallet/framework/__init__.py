@@ -5,5 +5,5 @@ from .androidz import (
     Uri, FileInputStream, InputType, FocusChangeListener, RelativeDialog,
     Notification, LongClickListener, PopupMenu, BitmapFactory, BitmapDrawable,
     Boolean, MenuClickListener, Paint, Resources, TypedValue, RunnableProxy,
-    Context, InputMethodManager, TorController, Intent
+    Context, InputMethodManager, TorController, Intent, FileShare
 )
