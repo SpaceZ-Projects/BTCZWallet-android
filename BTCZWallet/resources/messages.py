@@ -11,7 +11,7 @@ from ..framework import (
     ClickListener, CopyText, InputType, FocusChangeListener,
     RelativeDialog, LongClickListener, PopupMenu, BitmapFactory,
     BitmapDrawable, Boolean, MenuClickListener, Resources, Paint,
-    TypedValue, ToastMessage, Context
+    TypedValue, ToastMessage, Context, Linkify, LinkMovementMethod
 )
 from toga.style.pack import Pack
 from toga.constants import COLUMN, CENTER, BOLD, ROW, RIGHT, LEFT
@@ -339,6 +339,11 @@ class Message(Box):
                 flex=1
             )
         )
+        self.message_label._impl.native.setAutoLinkMask(Linkify.WEB_URLS)
+        self.message_label._impl.native.setLinksClickable(True)
+        self.message_label._impl.native.setMovementMethod(LinkMovementMethod.getInstance())
+
+
         self._impl.native.setClickable(True)
         self._impl.native.setOnLongClickListener(
             LongClickListener(

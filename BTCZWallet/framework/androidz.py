@@ -16,6 +16,8 @@ from android.view import View
 from android.view.inputmethod import InputMethodManager
 from android.content import ClipboardManager, ClipData, Intent, DialogInterface, Context, ServiceConnection
 from android.text import InputType
+from android.text.util import Linkify
+from android.text.method import LinkMovementMethod
 from android.content.res import Configuration, Resources
 from androidx.core.app import NotificationCompat, NotificationManagerCompat
 from androidx.documentfile.provider import DocumentFile
