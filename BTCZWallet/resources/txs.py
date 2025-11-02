@@ -4,7 +4,11 @@ from datetime import datetime
 import operator
 
 from toga import App, MainWindow, Box, Label, ImageView, ScrollContainer
-from ..framework import ClickListener
+from ..framework import (
+    ClickListener, LongClickListener, PopupMenu, BitmapDrawable,
+    BitmapFactory, MenuClickListener, Boolean, Intent, Uri,
+    CopyText
+)
 from toga.style.pack import Pack
 from toga.colors import rgb, GREENYELLOW, RED, WHITE
 from toga.constants import ROW, CENTER, BOLD, RIGHT, COLUMN
@@ -137,6 +141,7 @@ class Txid(Box):
 
         self._impl.native.setClickable(True)
         self._impl.native.setOnClickListener(ClickListener(self.show_tx_info))
+        self._impl.native.setOnLongClickListener(LongClickListener(self.show_txid_popmenu))
 
         self.add(
             self.confirmations_icon,
@@ -160,6 +165,7 @@ class Txid(Box):
                 confirmations = height[0] - blocks
             else:
                 confirmations = (height[0] - blocks) + 1
+        formatted_time = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
         message = (
             f"Type : {tx_type}\n"
             f"Category : {text}\n"
@@ -168,12 +174,56 @@ class Txid(Box):
             f"TxID : {txid}\n\n"
             f"Blocks : {blocks}\n"
             f"Amount : {amount}\n"
-            f"Fee : {txfee}"
+            f"Fee : {txfee}\n\n"
+            f"Date : {formatted_time}"
         )
         self.main.info_dialog(
             title="Transaction Info",
             message=message
         )
+
+
+    def show_txid_popmenu(self, view):
+        popup = PopupMenu(self.app.activity, view)
+        context_menu = popup.getMenu()
+
+        copy_txid_cmd = context_menu.add("Copy Txid")
+        copy_icon = f"{self.script_path}/images/copy.png"
+        copy_bmp = BitmapFactory.decodeFile(copy_icon)
+        copy_drawable = BitmapDrawable(self.app.activity.getResources(), copy_bmp)
+        copy_txid_cmd.setIcon(copy_drawable)
+
+        explorer_cmd = context_menu.add("Open in explorer")
+        explorer_icon = f"{self.script_path}/images/explorer.png"
+        explorer_bmp = BitmapFactory.decodeFile(explorer_icon)
+        explorer_drawable = BitmapDrawable(self.app.activity.getResources(), explorer_bmp)
+        explorer_cmd.setIcon(explorer_drawable)
+
+        try:
+            popup_class = popup.getClass()
+            field = popup_class.getDeclaredField("mPopup")
+            field.setAccessible(True)
+            menu_helper = field.get(popup)
+            menu_helper_class = menu_helper.getClass()
+            method = menu_helper_class.getDeclaredMethod("setForceShowIcon", Boolean.TYPE)
+            method.invoke(menu_helper, True)
+        except Exception as e:
+            print(f"error icon: {e}")
+
+        popup.setOnMenuItemClickListener(MenuClickListener(self.on_popmenu_click))
+        popup.show()
+
+
+    def on_popmenu_click(self, title):
+        if title == "Open in explorer":
+            url = f"https://explorer.btcz.rocks/tx/{self.txid}"
+            intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            intent.addCategory(Intent.CATEGORY_BROWSABLE)
+            self.app.activity.startActivity(intent)
+
+        elif title == "Copy Txid":
+            CopyText(self.txid)
+        
 
 
 
