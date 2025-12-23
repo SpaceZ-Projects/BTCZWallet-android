@@ -608,52 +608,46 @@ class Mining(Box):
 
 
     async def update_mining_stats(self):
-        while True:
-            if not self.is_active or not self.menu.server_status:
-                await asyncio.sleep(1)
-                continue
-            device_auth = self.device_storage.get_auth()
-            url = f'http://{device_auth[0]}/mining'
-            result = await self.utils.make_request(device_auth[1], device_auth[2], url)
-            if not result or "error" in result:
-                color = RED
-                status = "Off"
-            else:
-                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
-                result = json.loads(decrypted)
-                color = GREENYELLOW
-                status = "On"
+        device_auth = self.device_storage.get_auth()
+        url = f'http://{device_auth[0]}/mining'
+        result = await self.utils.make_request(device_auth[1], device_auth[2], url)
+        if not result or "error" in result:
+            color = RED
+            status = "Off"
+        else:
+            decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+            result = json.loads(decrypted)
+            color = GREENYELLOW
+            status = "On"
 
-                now = int(datetime.now().timestamp())
-                formatted_time = datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M:%S")
+            now = int(datetime.now().timestamp())
+            formatted_time = datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M:%S")
 
-                miner = result.get('miner')
-                address = result.get('address')
-                pool = result.get('pool')
-                region = result.get('region')
-                worker = result.get('worker')
-                shares = result.get('shares')
-                balance = result.get('balance')
-                immature = result.get('immature')
-                paid = result.get('paid')
-                solutions = result.get('solutions')
-                reward = result.get('reward')
+            miner = result.get('miner')
+            address = result.get('address')
+            pool = result.get('pool')
+            region = result.get('region')
+            worker = result.get('worker')
+            shares = result.get('shares')
+            balance = result.get('balance')
+            immature = result.get('immature')
+            paid = result.get('paid')
+            solutions = result.get('solutions')
+            reward = result.get('reward')
 
-                self.miner_value.text = miner
-                self.address_value.value = address
-                self.pool_value.text = pool
-                self.region_value.text = region
-                self.worker_value.text = worker
-                self.shares_value.text = f"{shares:.2f}"
-                self.solutions_value.text = f"{solutions:.2f} Sol/s"
-                self.paid_value.text = self.units.format_balance(paid)
-                self.balance_value.text = self.units.format_balance(balance)
-                self.immature_value.text = self.units.format_balance(immature)
-                self.reward_value.text = f"{int(reward)} / Day"
+            self.miner_value.text = miner
+            self.address_value.value = address
+            self.pool_value.text = pool
+            self.region_value.text = region
+            self.worker_value.text = worker
+            self.shares_value.text = f"{shares:.2f}"
+            self.solutions_value.text = f"{solutions:.2f} Sol/s"
+            self.paid_value.text = self.units.format_balance(paid)
+            self.balance_value.text = self.units.format_balance(balance)
+            self.immature_value.text = self.units.format_balance(immature)
+            self.reward_value.text = f"{int(reward)} / Day"
 
-                self.recent_value.text = formatted_time
+            self.recent_value.text = formatted_time
             
-            self.status_value.style.color = color
-            self.status_value.text = status
-
-            await asyncio.sleep(60)
+        self.status_value.style.color = color
+        self.status_value.text = status

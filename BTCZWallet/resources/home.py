@@ -300,7 +300,7 @@ class Home(Box):
             self.transactions_scroll
         )
 
-        self.app.loop.create_task(self.update_balances())
+        self.update_balances()
         self.app.loop.create_task(self.load_transactions())
 
 
@@ -312,27 +312,21 @@ class Home(Box):
         self.price_label.text = f"BTCZ Price : {self.units.format_price(price)} {currency.upper()}"
 
     
-    async def update_balances(self):
-        while True:
-            if not self.is_active:
-                await asyncio.sleep(1)
-                continue
-            _, currency, price = self.wallet_storage.get_info()
-            wallet = self.wallet_storage.get_addresses()
-            if wallet:
-                for data in wallet:
-                    tbalance = data[2]
-                    zbalance = data[3]
-                    total_balances = tbalance + zbalance
-                    self.transparent_value.text = self.units.format_balance(tbalance)
-                    self.shielded_value.text = self.units.format_balance(zbalance)
-                    self.total_value.text = self.units.format_balance(total_balances)
-                    total_funds = total_balances * float(price)
-                    self.funds_label.text = f"Total : {self.units.format_price(total_funds)} {currency.upper()}"
-                    self.main.tbalance = tbalance
-                    self.main.zbalance = zbalance
-                
-            await asyncio.sleep(5)
+    def update_balances(self):
+        _, currency, price = self.wallet_storage.get_info()
+        wallet = self.wallet_storage.get_addresses()
+        if wallet:
+            for data in wallet:
+                tbalance = data[2]
+                zbalance = data[3]
+                total_balances = tbalance + zbalance
+                self.transparent_value.text = self.units.format_balance(tbalance)
+                self.shielded_value.text = self.units.format_balance(zbalance)
+                self.total_value.text = self.units.format_balance(total_balances)
+                total_funds = total_balances * float(price)
+                self.funds_label.text = f"Total : {self.units.format_price(total_funds)} {currency.upper()}"
+                self.main.tbalance = tbalance
+                self.main.zbalance = zbalance
 
 
     def get_transactions(self, limit, offset):
@@ -362,44 +356,38 @@ class Home(Box):
 
 
     async def update_transactions(self):
-        while True:
-            if not self.is_active:
-                await asyncio.sleep(1)
-                continue
-            height = self.wallet_storage.get_info("height")
-            transactions = self.get_transactions(20, 0)
-            transactions = sorted(
-                transactions,
-                key=operator.itemgetter(7),
-                reverse=False
-            )
-            for data in transactions:
-                tx_type = data[0]
-                txid = data[3]
-                blocks = data[5]
-                if txid not in self.transactions_data:
-                    transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
-                    self.transactions_box.insert(0, transaction_info)
-                    self.transactions_data[txid] = transaction_info
-                    if len(self.transactions_data) > 20:
-                        child = self.transactions_box.children[20]
-                        self.transactions_box.remove(child)
-                    await asyncio.sleep(0.0)
-                else:
-                    confirmations = 0
-                    existing_tx = self.transactions_data[txid]
-                    if blocks > 0:
-                        if tx_type == "shielded":
-                            confirmations = height[0] - blocks
-                        else:
-                            confirmations = (height[0] - blocks) + 1
-                    if confirmations <= 6:
-                        icon = f"{self.script_path}/images/{confirmations}.png"
-                        existing_tx.confirmations_icon.image = icon
+        height = self.wallet_storage.get_info("height")
+        transactions = self.get_transactions(20, 0)
+        transactions = sorted(
+            transactions,
+            key=operator.itemgetter(7),
+            reverse=False
+        )
+        for data in transactions:
+            tx_type = data[0]
+            txid = data[3]
+            blocks = data[5]
+            if txid not in self.transactions_data:
+                transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
+                self.transactions_box.insert(0, transaction_info)
+                self.transactions_data[txid] = transaction_info
+                if len(self.transactions_data) > 20:
+                    child = self.transactions_box.children[20]
+                    self.transactions_box.remove(child)
+                await asyncio.sleep(0.0)
+            else:
+                confirmations = 0
+                existing_tx = self.transactions_data[txid]
+                if blocks > 0:
+                    if tx_type == "shielded":
+                        confirmations = height[0] - blocks
                     else:
-                        if not existing_tx.has_confirmed:
-                            icon = f"{self.script_path}/images/confirmed.png"
-                            existing_tx.confirmations_icon.image = icon
-                            existing_tx.has_confirmed = True
-
-            await asyncio.sleep(5)
+                        confirmations = (height[0] - blocks) + 1
+                if confirmations <= 6:
+                    icon = f"{self.script_path}/images/{confirmations}.png"
+                    existing_tx.confirmations_icon.image = icon
+                else:
+                    if not existing_tx.has_confirmed:
+                        icon = f"{self.script_path}/images/confirmed.png"
+                        existing_tx.confirmations_icon.image = icon
+                        existing_tx.has_confirmed = True

@@ -8,7 +8,7 @@ from toga import (
 from ..framework import ToastMessage, ClickListener, CopyText
 from toga.style.pack import Pack
 from toga.constants import COLUMN, CENTER, BOLD, ROW
-from toga.colors import rgb, GRAY, WHITE, YELLOW, GREENYELLOW, BLACK, TRANSPARENT
+from toga.colors import rgb, GRAY, WHITE, YELLOW, GREENYELLOW, BLACK
 
 from .storage import DeviceStorage, AddressesStorage
 
@@ -302,27 +302,21 @@ class AddressBook(Box):
 
 
     async def update_address_book(self):
-        while True:
-            if not self.is_active:
-                await asyncio.sleep(1)
-                continue
-            local_addresses = []
-            address_book = self.addresses_storage.get_address_book()
-            for data in address_book:
-                address = data[1]
-                local_addresses.append(address)
-                if address not in self.addresses_data:
-                    address_info = Address(self.script_path, self.utils, data)
-                    self.addresses_data[address] = address_info
-                    self.book_list.add(address_info)
-                    await asyncio.sleep(0.0)
+        local_addresses = []
+        address_book = self.addresses_storage.get_address_book()
+        for data in address_book:
+            address = data[1]
+            local_addresses.append(address)
+            if address not in self.addresses_data:
+                address_info = Address(self.script_path, self.utils, data)
+                self.addresses_data[address] = address_info
+                self.book_list.add(address_info)
+                await asyncio.sleep(0.0)
             
-            for address in self.addresses_data:
-                if address not in local_addresses:
-                    existing_address = self.addresses_data[address]
-                    self.book_list.remove(existing_address)
-            
-            await asyncio.sleep(5)
+        for address in self.addresses_data:
+            if address not in local_addresses:
+                existing_address = self.addresses_data[address]
+                self.book_list.remove(existing_address)
 
 
     def show_inputs(self, button):

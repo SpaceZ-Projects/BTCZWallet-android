@@ -19,6 +19,7 @@ from .storage import (
     WalletStorage, DeviceStorage, TxsStorage, AddressesStorage,
     MessagesStorage
 )
+from .stream import StreamClient
 
 
 class Menu(OptionContainer):
@@ -81,11 +82,8 @@ class Menu(OptionContainer):
         self.app.proxy._back_callback = self.on_back_pressed
         self.app.proxy._config_changed_callback = self.on_config_changed
 
-        self.server_status = None
         self.switch_toggle = None
         self.more_toggle = None
-        self.read_messages = []
-        self.unread_messages = []
 
         self.book_page = AddressBook(self.app, self.main, self.script_path, self.utils, self.units)
         self.book_option = OptionItem(
@@ -304,200 +302,225 @@ class Menu(OptionContainer):
                 self.messages_storage.insert_identity(address)
 
         self.messages_page.load_chat()
-        self.run_tasks()
+        self.app.loop.create_task(self.verify_server_status())
 
 
-    def run_tasks(self):
-        self.app.loop.create_task(self.update_server_status())
+    async def verify_server_status(self):
+        self.home_page.update_status("Connecting...", GRAY)
+        device_auth = self.device_storage.get_auth()
+        url = f'http://{device_auth[0]}/status'
+        result = await self.utils.make_request(device_auth[1], device_auth[2], url)
+        if not result or "error" in result:
+            status = "Offline"
+            color = RED
+            self.home_page.update_status(status, color)
+            ToastMessage("Server is offline - retrying in 30 seconds")
+            await asyncio.sleep(30)
+            self.app.loop.create_task(self.verify_server_status())
+        else:
+            decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+            result = json.loads(decrypted)
+            version = result.get('version')
+            min_version = (1, 5, 9)
+            if not version:
+                self.main.error_dialog(
+                    title="Update Required",
+                    message=f"Server version is too old. Please update to at least 1.5.9"
+                )
+            else:
+                try:
+                    version_tuple = tuple(int(x) for x in version.split("."))
+                except ValueError:
+                    self.main.error_dialog(
+                        title="Update Required",
+                        message=f"Invalid server version format: {version}"
+                    )
+                else:
+                    if version_tuple < min_version:
+                        self.main.error_dialog(
+                            title="Update Required",
+                            message=f"Server version {version} is too old. Please update to at least 1.5.9"
+                        )
+                    else:
+                        height = result.get('height')
+                        currency = result.get('currency')
+                        price = result.get('price')
+                        self.wallet_storage.update_info(height, currency, price)
+                        self.stream()
+
+
+    def stream(self):
+        device_auth = self.device_storage.get_auth()
+        url = f'http://{device_auth[0]}/stream'
+        self.sse = StreamClient(
+            self.units, device_auth[1], device_auth[2], url,
+            on_action=self.server_stream_handler
+        )
+        self.app.loop.create_task(self.sse.connect())
+        self.app.loop.create_task(self._wait_for_sse())
+
         self.app.loop.create_task(self.update_balances())
         self.app.loop.create_task(self.update_transactions())
         self.app.loop.create_task(self.update_address_book())
         self.app.loop.create_task(self.update_contacts())
 
 
-    async def update_server_status(self):
+    async def _wait_for_sse(self):
         while True:
-            if not self.server_status:
-                self.home_page.update_status("Connecting...", GRAY)
-            device_auth = self.device_storage.get_auth()
-            url = f'http://{device_auth[0]}/status'
-            result = await self.utils.make_request(device_auth[1], device_auth[2], url)
-            if not result or "error" in result:
-                self.server_status = None
+            if self.sse.running:
+                if self.sse.connected.is_set():
+                    status = "Online"
+                    color = GREENYELLOW
+                else:
+                    status = "Connecting..."
+                    color = GRAY
+            else:
                 status = "Offline"
                 color = RED
-                ToastMessage("Server is offline - retrying in 30 seconds")
-            else:
-                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
-                result = json.loads(decrypted)
-                version = result.get('version')
-                min_version = (1, 4, 9)
-                if not version:
-                    self.main.error_dialog(
-                        title="Update Required",
-                        message=f"Server version is too old. Please update to at least 1.4.9"
-                    )
-                    self.server_status = None
-                    status = "Offline"
-                    color = RED
-                else:
-                    try:
-                        version_tuple = tuple(int(x) for x in version.split("."))
-                    except ValueError:
-                        self.main.error_dialog(
-                            title="Update Required",
-                            message=f"Invalid server version format: {version}"
-                        )
-                        self.server_status = None
-                        status = "Offline"
-                        color = RED
-                    else:
-                        if version_tuple < min_version:
-                            self.main.error_dialog(
-                                title="Update Required",
-                                message=f"Server version {version} is too old. Please update to at least 1.4.9"
-                            )
-                            self.server_status = None
-                            status = "Offline"
-                            color = RED
-                        else:
-                            height = result.get('height')
-                            currency = result.get('currency')
-                            price = result.get('price')
-                            self.server_status = True
-                            status = "Online"
-                            color = GREENYELLOW
-                            self.wallet_storage.update_info(height, currency, price)
 
             self.home_page.update_status(status, color)
+            await asyncio.sleep(2)
 
-            await asyncio.sleep(30)
+
+    async def server_stream_handler(self, action):
+        if action == "update_info":
+            self.app.loop.create_task(self.update_server_info())
+            self.app.loop.create_task(self.update_transactions())
+            self.app.loop.create_task(self.update_balances())
+        elif action == "update_messages":
+            self.app.loop.create_task(self.messages_page.update_messages())
+            self.app.loop.create_task(self.messages_page.update_balance())
+        elif action == "update_contacts":
+            self.app.loop.create_task(self.update_contacts())
+        elif action == "update_transactions":
+            self.app.loop.create_task(self.update_transactions())
+            self.app.loop.create_task(self.update_balances())
+        elif action == "update_book":
+            self.app.loop.create_task(self.update_address_book())
+        elif action == "update_mining":
+            self.app.loop.create_task(self.mining_page.update_mining_stats())
+
+
+    async def update_server_info(self):
+        device_auth = self.device_storage.get_auth()
+        url = f'http://{device_auth[0]}/status'
+        result = await self.utils.make_request(device_auth[1], device_auth[2], url)
+        if result and "data" in result:
+            decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+            result = json.loads(decrypted)
+            height = result.get('height')
+            currency = result.get('currency')
+            price = result.get('price')
+            self.wallet_storage.update_info(height, currency, price)
 
 
     async def update_balances(self):
-        while True:
-            if not self.server_status:
-                await asyncio.sleep(1)
-                continue
-            device_auth = self.device_storage.get_auth()
-            url = f'http://{device_auth[0]}/balances'
-            result = await self.utils.make_request(device_auth[1], device_auth[2], url)
-            if result and "data" in result:
-                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
-                result = json.loads(decrypted)
-                transparent = result.get('transparent')
-                shielded = result.get('shielded')
-                self.wallet_storage.update_balances(transparent, shielded)
-
-            await asyncio.sleep(10)
+        device_auth = self.device_storage.get_auth()
+        url = f'http://{device_auth[0]}/balances'
+        result = await self.utils.make_request(device_auth[1], device_auth[2], url)
+        if result and "data" in result:
+            decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+            result = json.loads(decrypted)
+            transparent = result.get('transparent')
+            shielded = result.get('shielded')
+            self.wallet_storage.update_balances(transparent, shielded)
+            self.home_page.update_balances()
 
 
     async def update_transactions(self):
-        while True:
-            if not self.server_status:
-                await asyncio.sleep(1)
-                continue
-            transactions_data = self.txs_storage.get_transactions(True)
-            device_auth = self.device_storage.get_auth()
-            url = f'http://{device_auth[0]}/transactions'
-            result = await self.utils.make_request(device_auth[1], device_auth[2], url)
-            if result and "data" in result:
-                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
-                result = json.loads(decrypted)
-                for data in result:
-                    tx_type = data.get('type')
-                    category = data.get('category')
-                    address = data.get('address')
-                    txid = data.get('txid')
-                    amount = data.get('amount')
-                    blocks = data.get('blocks')
-                    txfee = data.get('fee')
-                    timestamp = data.get('timestamp')
-                    if txid not in transactions_data:
-                        self.insert_transaction(tx_type, category, address, txid, amount, blocks, txfee, timestamp)
-                        if category == "receive":
-                            self.app.notify.show(f"Receive", f"{amount} BTCZ")
-                    else:
-                        self.update_blocks(txid, blocks)
-
-            await asyncio.sleep(15)
+        transactions_data = self.txs_storage.get_transactions(True)
+        device_auth = self.device_storage.get_auth()
+        url = f'http://{device_auth[0]}/transactions'
+        result = await self.utils.make_request(device_auth[1], device_auth[2], url)
+        if result and "data" in result:
+            decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+            result = json.loads(decrypted)
+            for data in result:
+                tx_type = data.get('type')
+                category = data.get('category')
+                address = data.get('address')
+                txid = data.get('txid')
+                amount = data.get('amount')
+                blocks = data.get('blocks')
+                txfee = data.get('fee')
+                timestamp = data.get('timestamp')
+                if txid not in transactions_data:
+                    self.insert_transaction(tx_type, category, address, txid, amount, blocks, txfee, timestamp)
+                    if category == "receive":
+                        self.app.notify.show(f"Receive", f"{amount} BTCZ")
+                else:
+                    self.update_blocks(txid, blocks)
+            self.app.loop.create_task(self.home_page.update_transactions())
+            self.app.loop.create_task(self.transactions_page.update_transactions())
 
 
     async def update_address_book(self):
-        while True:
-            if not self.server_status:
-                await asyncio.sleep(1)
-                continue
-            server_addresses = []
-            device_auth = self.device_storage.get_auth()
-            url = f'http://{device_auth[0]}/book'
-            params = {"get": "address"}
-            result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
-            if result and "data" in result:
-                address_book = self.addresses_storage.get_address_book("address")
-                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
-                result = json.loads(decrypted)
-                for data in result:
-                    name = data.get('name')
-                    address = data.get('address')
-                    server_addresses.append(address)
-                    if address not in address_book:
-                        self.addresses_storage.insert_book(name, address)
+        server_addresses = []
+        device_auth = self.device_storage.get_auth()
+        url = f'http://{device_auth[0]}/book'
+        params = {"get": "address"}
+        result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
+        if result and "data" in result:
+            address_book = self.addresses_storage.get_address_book("address")
+            decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+            result = json.loads(decrypted)
+            for data in result:
+                name = data.get('name')
+                address = data.get('address')
+                server_addresses.append(address)
+                if address not in address_book:
+                    self.addresses_storage.insert_book(name, address)
 
-                for address in address_book:
-                    if address not in server_addresses:
-                        self.addresses_storage.delete_address_book(address)
+            for address in address_book:
+                if address not in server_addresses:
+                    self.addresses_storage.delete_address_book(address)
 
-            await asyncio.sleep(10)
+            self.app.loop.create_task(self.book_page.update_address_book())
 
 
     async def update_contacts(self):
-        while True:
-            if not self.server_status or not self.messages_storage.get_identity():
-                await asyncio.sleep(1)
-                continue
-            device_auth = self.device_storage.get_auth()
-            url = f'http://{device_auth[0]}/contacts'
-            params = {"get": "contacts"}
-            result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
-            if result and "data" in result:
-                server_contacts = []
-                contacts = self.messages_storage.get_contacts("contact_id")
-                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
-                result = json.loads(decrypted)
-                for data in result:
-                    category = data.get('category')
-                    contact_id = data.get('contact_id')
-                    username = data.get('username')
-                    server_contacts.append(contact_id)
-                    if contact_id not in contacts:
-                        self.messages_storage.add_contact(category, contact_id, username)
+        device_auth = self.device_storage.get_auth()
+        url = f'http://{device_auth[0]}/contacts'
+        params = {"get": "contacts"}
+        result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
+        if result and "data" in result:
+            server_contacts = []
+            contacts = self.messages_storage.get_contacts("contact_id")
+            decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+            result = json.loads(decrypted)
+            for data in result:
+                category = data.get('category')
+                contact_id = data.get('contact_id')
+                username = data.get('username')
+                server_contacts.append(contact_id)
+                if contact_id not in contacts:
+                    self.messages_storage.add_contact(category, contact_id, username)
 
-                for id in contacts:
-                    if id not in server_contacts:
-                        self.messages_storage.delete_contact(id)
+            for id in contacts:
+                if id not in server_contacts:
+                    self.messages_storage.delete_contact(id)
 
-            params = {"get": "pending"}
-            result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
-            if result and "data" in result:
-                server_pending = []
-                pending = self.messages_storage.get_pending("id")
-                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
-                result = json.loads(decrypted)
-                for data in result:
-                    category = data.get('category')
-                    contact_id = data.get('contact_id')
-                    username = data.get('username')
-                    server_pending.append(contact_id)
-                    if contact_id not in pending:
-                        self.messages_storage.add_pending(category, contact_id, username)
-                        self.app.notify.show(f"New Request", username)
+        params = {"get": "pending"}
+        result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
+        if result and "data" in result:
+            server_pending = []
+            pending = self.messages_storage.get_pending("id")
+            decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+            result = json.loads(decrypted)
+            for data in result:
+                category = data.get('category')
+                contact_id = data.get('contact_id')
+                username = data.get('username')
+                server_pending.append(contact_id)
+                if contact_id not in pending:
+                    self.messages_storage.add_pending(category, contact_id, username)
+                    self.app.notify.show(f"New Request", username)
 
-                for id in pending:
-                    if id not in server_pending:
-                        self.messages_storage.delete_pending(id)
-
-            await asyncio.sleep(10)
+            for id in pending:
+                if id not in server_pending:
+                    self.messages_storage.delete_pending(id)
+        
+        self.messages_page.update_menu()
 
 
     

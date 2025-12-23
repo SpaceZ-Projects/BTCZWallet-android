@@ -299,47 +299,41 @@ class Transactions(ScrollContainer):
 
 
     async def update_transactions(self):
-        while True:
-            if not self.is_active or self.is_loading:
-                await asyncio.sleep(1)
-                continue
-            height = self.wallet_storage.get_info("height")
-            transactions = self.get_transactions(20, 0)
-            transactions = sorted(
-                transactions,
-                key=operator.itemgetter(7),
-                reverse=False
-            )
-            for data in transactions:
-                tx_type = data[0]
-                txid = data[3]
-                blocks = data[5]
-                if txid not in self.transactions_data:
-                    transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
-                    self.transactions_box.insert(0, transaction_info)
-                    self.transactions_data[txid] = transaction_info
-                    await asyncio.sleep(0.0)
-                else:
-                    confirmations = 0
-                    existing_tx = self.transactions_data[txid]
-                    if blocks > 0:
-                        if tx_type == "shielded":
-                            confirmations = height[0] - blocks
-                        else:
-                            confirmations = (height[0] - blocks) + 1
-                    if 0 <= confirmations <= 6:
-                        icon = f"{self.script_path}/images/{confirmations}.png"
-                        existing_tx.confirmations_icon.image = icon
-                    elif confirmations < 0:
-                        icon = f"{self.script_path}/images/0.png"
-                        existing_tx.confirmations_icon.image = icon
+        height = self.wallet_storage.get_info("height")
+        transactions = self.get_transactions(20, 0)
+        transactions = sorted(
+            transactions,
+            key=operator.itemgetter(7),
+            reverse=False
+        )
+        for data in transactions:
+            tx_type = data[0]
+            txid = data[3]
+            blocks = data[5]
+            if txid not in self.transactions_data:
+                transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
+                self.transactions_box.insert(0, transaction_info)
+                self.transactions_data[txid] = transaction_info
+                await asyncio.sleep(0.0)
+            else:
+                confirmations = 0
+                existing_tx = self.transactions_data[txid]
+                if blocks > 0:
+                    if tx_type == "shielded":
+                        confirmations = height[0] - blocks
                     else:
-                        if not existing_tx.has_confirmed:
-                            icon = f"{self.script_path}/images/confirmed.png"
-                            existing_tx.confirmations_icon.image = icon
-                            existing_tx.has_confirmed = True
-                    
-            await asyncio.sleep(5)
+                        confirmations = (height[0] - blocks) + 1
+                if 0 <= confirmations <= 6:
+                    icon = f"{self.script_path}/images/{confirmations}.png"
+                    existing_tx.confirmations_icon.image = icon
+                elif confirmations < 0:
+                    icon = f"{self.script_path}/images/0.png"
+                    existing_tx.confirmations_icon.image = icon
+                else:
+                    if not existing_tx.has_confirmed:
+                        icon = f"{self.script_path}/images/confirmed.png"
+                        existing_tx.confirmations_icon.image = icon
+                        existing_tx.has_confirmed = True
 
 
     async def reload_transactions(self):
