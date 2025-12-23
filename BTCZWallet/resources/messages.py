@@ -2,6 +2,7 @@
 import asyncio
 import json
 from datetime import datetime
+from pathlib import Path
 
 from toga import (
     App, MainWindow, Box, ImageView, Label, ScrollContainer,
@@ -10,12 +11,12 @@ from toga import (
 from ..framework import (
     ClickListener, CopyText, InputType, FocusChangeListener,
     RelativeDialog, LongClickListener, PopupMenu, BitmapFactory,
-    BitmapDrawable, Boolean, MenuClickListener, Resources, Paint,
-    TypedValue, ToastMessage, Context, Linkify, LinkMovementMethod
+    BitmapDrawable, Boolean, MenuClickListener, ToastMessage, Context,
+    AndroidWebView, Intent, Uri
 )
 from toga.style.pack import Pack
-from toga.constants import COLUMN, CENTER, BOLD, ROW, RIGHT, LEFT
-from toga.colors import rgb, WHITE, BLACK, GRAY, RED, YELLOW, GREENYELLOW, CYAN
+from toga.constants import COLUMN, CENTER, BOLD, ROW, RIGHT
+from toga.colors import rgb, WHITE, BLACK, GRAY, RED, YELLOW, GREENYELLOW
 
 from .storage import DeviceStorage, MessagesStorage
 
@@ -242,216 +243,6 @@ class PendingList(RelativeDialog):
         
     def on_cancel_dialog(self):
         self.is_active = None
-
-
-
-class Message(Box):
-    def __init__(self, app:App, script_path, utils, units, data):
-        super().__init__(
-            style=Pack(
-                direction=COLUMN,
-                background_color=rgb(30,33,36),
-                alignment=CENTER,
-                padding = (10,5,10,5)
-            )
-        )
-
-        self.app = app
-        self.script_path = script_path
-        self.utils = utils
-
-        x = self.utils.screen_resolution()
-        if 1200 < x <= 1600:
-            text_size = 13
-            message_size = 12
-            small_size = 10
-        elif 800 < x <= 1200:
-            text_size = 12
-            message_size = 11
-            small_size = 9
-        elif 480 < x <= 800:
-            text_size = 10
-            message_size = 9
-            small_size = 7
-        else:
-            text_size = 18
-            message_size = 17
-            small_size = 15
-
-        author, message, amount, timestamp = data
-        if author == "you":
-            color = CYAN
-            author = "You"
-        else:
-            color = rgb(114,137,218)
-
-        message_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-
-        self.author_label = Label(
-            text=f"{author} :",
-            style=Pack(
-                color=color,
-                background_color=rgb(30,33,36),
-                font_size=text_size,
-                font_weight=BOLD,
-                text_align=LEFT,
-                flex=1.5
-            )
-        )
-
-        self.gift_label = Label(
-            text="",
-            style=Pack(
-                color=YELLOW,
-                background_color=rgb(30,33,36),
-                font_size=small_size,
-                text_align=CENTER,
-                flex=1
-            )
-        )
-
-        self.timestamp_label = Label(
-            text=message_time,
-            style=Pack(
-                color=GRAY,
-                background_color=rgb(30,33,36),
-                font_size=small_size,
-                text_align=CENTER,
-                flex=1
-            )
-        )
-
-        self.info_box = Box(
-            style=Pack(
-                direction = ROW,
-                background_color=rgb(30,33,36),
-                alignment=CENTER,
-                padding=(0,0,2,0)
-            )
-        )
-
-        self.message_label = Label(
-            text=message,
-            style=Pack(
-                color=WHITE,
-                background_color=rgb(30,33,36),
-                font_size=message_size,
-                flex=1
-            )
-        )
-        self.message_label._impl.native.setAutoLinkMask(Linkify.WEB_URLS)
-        self.message_label._impl.native.setLinksClickable(True)
-        self.message_label._impl.native.setMovementMethod(LinkMovementMethod.getInstance())
-
-
-        self._impl.native.setClickable(True)
-        self._impl.native.setOnLongClickListener(
-            LongClickListener(
-                lambda view, message=message :self.show_message_popmenu(view, message)
-            )
-        )
-
-        self.add(
-            self.info_box,
-            self.message_label
-        )
-        self.info_box.add(
-            self.author_label
-        )
-        if amount > 0.0001:
-            gift = amount - 0.0001
-            gift_format = units.format_balance(gift)
-            gift = f"🎁 {gift_format}"
-            self.gift_label.text = gift
-            self.info_box.add(self.gift_label)
-
-        self.info_box.add(self.timestamp_label)
-
-        self._wrap_message(message, message_size)
-
-
-    def _wrap_message(self, message, font_size_sp):
-        screen_width_px = self.utils.screen_resolution() - 300
-        metrics = Resources.getSystem().getDisplayMetrics()
-        font_size_px = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, font_size_sp, metrics)
-        paint = Paint()
-        paint.setTextSize(font_size_px)
-        words = message.split(" ")
-        lines = []
-        current_line = ""
-        current_width = 0
-        for word in words:
-            word_width = paint.measureText(word + " ")
-            if current_width + word_width <= screen_width_px:
-                current_line += word + " "
-                current_width += word_width
-            else:
-                if word_width > screen_width_px:
-                    part = ""
-                    part_width = 0
-                    for char in word:
-                        char_width = paint.measureText(char)
-                        if part_width + char_width > screen_width_px:
-                            if current_line:
-                                lines.append(current_line.rstrip())
-                                current_line = ""
-                            lines.append(part)
-                            part = char
-                            part_width = char_width
-                        else:
-                            part += char
-                            part_width += char_width
-                    if part:
-                        if current_line:
-                            lines.append(current_line.rstrip())
-                            current_line = part + " "
-                            current_width = paint.measureText(current_line)
-                        else:
-                            current_line = part + " "
-                            current_width = paint.measureText(current_line)
-                else:
-                    lines.append(current_line.rstrip())
-                    current_line = word + " "
-                    current_width = word_width
-
-        if current_line:
-            lines.append(current_line.rstrip())
-
-        self.message_label.text = "\n".join(lines)
-
-
-    def show_message_popmenu(self, view, message):
-        popup = PopupMenu(self.app.activity, view)
-        context_menu = popup.getMenu()
-
-        copy_message_cmd = context_menu.add("Copy message")
-        copy_icon = f"{self.script_path}/images/copy.png"
-        copy_bmp = BitmapFactory.decodeFile(copy_icon)
-        copy_drawable = BitmapDrawable(self.app.activity.getResources(), copy_bmp)
-        copy_message_cmd.setIcon(copy_drawable)
-
-        try:
-            popup_class = popup.getClass()
-            field = popup_class.getDeclaredField("mPopup")
-            field.setAccessible(True)
-            menu_helper = field.get(popup)
-            menu_helper_class = menu_helper.getClass()
-            method = menu_helper_class.getDeclaredMethod("setForceShowIcon", Boolean.TYPE)
-            method.invoke(menu_helper, True)
-        except Exception as e:
-            print(f"error icon: {e}")
-
-        popup.setOnMenuItemClickListener(
-            MenuClickListener(
-                lambda title, message=message :self.on_popmenu_click(title, message)
-            )
-        )
-        popup.show()
-
-
-    def on_popmenu_click(self, title, message):
-        if title == "Copy message":
-            CopyText(message)
         
 
         
@@ -850,32 +641,23 @@ class Chat(Box):
             )
         )
         self.contact_info_box.add(self.username_label)
-
-        self.chat_output = Box(
-            style=Pack(
-                direction=COLUMN,
-                background_color=rgb(30,33,36),
-                flex = 1
-            )
-        )
-
-        self.output_scroll = ScrollContainer(
-            vertical=True,
-            horizontal=False,
-            style=Pack(
-                background_color=rgb(30,33,36),
-                flex = 7
-            )
+        
+        self.app.proxy.set_js_callback(self.on_web_action)
+        html_path = Path(__file__).parent / "html" / "messages.html"
+        self.chat_output = AndroidWebView(
+            self.app.activity,
+            content=html_path,
+            app_proxy=self.app.proxy
         )
 
         self.output_box = Box(
             style=Pack(
                 direction=COLUMN,
                 background_color=rgb(30,33,36),
-                flex = 1
+                flex = 7
             )
         )
-        self.output_scroll.content = self.output_box
+        self.chat_output.attach_to(self.output_box._impl.native)
 
         self.message_input = MultilineTextInput(
             placeholder="Write message",
@@ -953,7 +735,7 @@ class Chat(Box):
         self.add(
             self.menu_box,
             self.contact_info_box,
-            self.output_scroll,
+            self.output_box,
             self.input_box
         )
         self.menu_box.add(
@@ -962,9 +744,6 @@ class Chat(Box):
             self.copy_address,
             self.balances_value,
             self.contacts_list
-        )
-        self.output_box.add(
-            self.chat_output
         )
         self.input_box.add(
             self.message_input,
@@ -985,7 +764,7 @@ class Chat(Box):
                 self.contact_info_box,
                 self.input_box
             )
-            self.output_scroll.style.flex = 4
+            self.output_box.style.flex = 4
             self.insert(1, self.contacts_scroll)
             self.app.loop.create_task(self.load_contacts_list())
         else:
@@ -995,14 +774,14 @@ class Chat(Box):
     def hide_contacts_list(self):
         self.contacts_box.clear()
         self.remove(self.contacts_scroll)
-        self.output_scroll.style.flex = 7
+        self.output_box.style.flex = 7
         self.insert(1, self.contact_info_box)
         self.add(self.input_box)
         self.contacts_toggle = None
 
 
     def hide_keyboard(self):
-        v = self.chat_output._impl.native
+        v = self.output_box._impl.native
         if not v.isAttachedToWindow():
             return
         v.clearFocus()
@@ -1101,6 +880,65 @@ class Chat(Box):
             )
 
 
+    def on_web_action(self, action, **kwargs):
+        if action == "scrolledToBottom":
+            self.on_scroll_bottom()
+        elif action == "scrolledToTop":
+            self.on_scroll_top()
+        elif action == "urlClicked":
+            url = kwargs.get('url')
+            self.app.loop.create_task(self.on_url_click(url))
+
+
+    def on_scroll_bottom(self):
+        if not self.loading_toggle:
+            self.app.loop.create_task(self.clean_unread_messages())
+
+
+    def on_scroll_top(self):
+        if not self.loading_toggle:
+            self.app.loop.create_task(self.load_old_messages())
+
+
+    async def on_url_click(self, url):
+        def on_result(widget, result):
+            if result is True:
+                intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                intent.addCategory(Intent.CATEGORY_BROWSABLE)
+                self.app.activity.startActivity(intent)
+
+        self.main.question_dialog(
+            title="Open External Link",
+            message=f"You're about to open:\n\n{url}\n\nDo you want to continue?",
+            on_result=on_result
+        )
+
+    def control_add_message(self, user_type: str, username: str, content: str, timestamp: str, edited_timestamp: str, amount):
+        args = [user_type, username, content, timestamp, edited_timestamp, amount]
+        js_args = json.dumps(args, ensure_ascii=False)
+        js_code = f"addMessage(...{js_args});"
+        self.chat_output.control.evaluateJavascript(js_code, None)
+
+
+    def control_insert_message(self, index: int, user_type: str, username: str, content: str, timestamp: str, edited_timestamp: str, amount):
+        args = [index, user_type, username, content, timestamp, edited_timestamp, amount]
+        js_args = json.dumps(args, ensure_ascii=False)
+        js_code = f"insertMessage(...{js_args});"
+        self.chat_output.control.evaluateJavascript(js_code, None)
+
+    def show_unread_label(self):
+        self.chat_output.control.evaluateJavascript("showUnreadLabel();", None)
+
+    def hide_unread_label(self):
+        self.chat_output.control.evaluateJavascript("hideUnreadLabel();", None)
+
+    def scroll_to_bottom(self):
+        self.chat_output.control.evaluateJavascript("scrollToBottom();", None)
+
+    def clear_chat(self):
+        self.chat_output.control.evaluateJavascript("clearChat();", None)
+
+
     def contact_click(self, view, contact_id, username):
         if self.send_toggle:
             return
@@ -1109,11 +947,10 @@ class Chat(Box):
             return
         if self.loading_toggle:
             return
-        self.output_scroll.on_scroll = None
         self.contact_id = contact_id
         self.hide_contacts_list()
+        self.clear_chat()
         self.username_label.text = username
-        self.chat_output.clear()
         self.last_message_timestamp = None
         self.selected_contact_toggle = True
         self.loading_toggle = True
@@ -1127,28 +964,35 @@ class Chat(Box):
             recent_messages = messages[:10]
             self.last_message_timestamp = recent_messages[-1][3]
             for data in recent_messages:
-                message = Message(self.app, self.script_path, self.utils, self.units, data)
-                self.chat_output.insert(0, message)
-                await asyncio.sleep(0.0)
-            self.output_scroll.vertical_position = self.output_scroll.max_vertical_position
+                author, message, amount, timestamp = data
+                message_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                if author != "you":
+                    user_type = "user"
+                    username = author
+                else:
+                    user_type = author
+                    username = "You"
+                self.control_insert_message(0, user_type, username, message, message_time, "", amount)
 
         self.unread_messages = self.messages_storage.get_unread_messages(self.contact_id)
         if self.unread_messages:
-            self.unread_toggle = True
-            self.chat_output.add(self.unread_label)
-            await asyncio.sleep(0.0)
-            self.output_scroll.vertical_position = self.output_scroll.max_vertical_position
+            self.output_box.add(self.unread_label)
             await asyncio.sleep(0.0)
             unread_messages = sorted(self.unread_messages, key=lambda x: x[3], reverse=False)
             for data in unread_messages:
-                message = Message(self.app, self.script_path, self.utils, self.units, data)
-                self.chat_output.add(message)
-                await asyncio.sleep(0.0)
+                author, message, amount, timestamp = data
+                message_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                if author != "you":
+                    user_type = "user"
+                    username = author
+                else:
+                    user_type = author
+                    username = "You"
+                self.control_add_message(user_type, username, message, message_time, "", amount)
         
         await asyncio.sleep(1)
         self.loading_toggle = None
         self.app.loop.create_task(self.update_current_messages(self.contact_id))
-        self.output_scroll.on_scroll = self._handle_on_scroll
 
 
     async def update_current_messages(self, contact_id):
@@ -1159,11 +1003,17 @@ class Chat(Box):
             if messages:
                 for data in messages:
                     if data not in self.messages:
-                        message = Message(self.app, self.script_path, self.utils, self.units, data)
-                        self.chat_output.add(message)
+                        author, message, amount, timestamp = data
+                        message_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                        if author != "you":
+                            user_type = "user"
+                            username = author
+                        else:
+                            user_type = author
+                            username = "You"
                         self.messages.append(data)
-                        await asyncio.sleep(0.0)
-                        self.output_scroll.vertical_position = self.output_scroll.max_vertical_position
+                        self.control_add_message(user_type, username, message, message_time, "", amount)
+                        self.scroll_to_bottom()
 
             current_unread_messages = []
             unread_messages = self.messages_storage.get_unread_messages(self.contact_id)
@@ -1173,21 +1023,26 @@ class Chat(Box):
                         current_unread_messages.append(data)
                             
                 if current_unread_messages:
-                    if not self.unread_toggle:
-                        self.unread_toggle = True
-                        self.chat_output.add(self.unread_label)
-                        await asyncio.sleep(0.0)
-
+                    self.show_unread_label()
+                    self.unread_toggle = True
                     for data in current_unread_messages:
-                        message = Message(self.app, self.script_path, self.utils, self.units, data)
-                        self.chat_output.add(message)
+                        author, message, amount, timestamp = data
+                        message_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                        if author != "you":
+                            user_type = "user"
+                            username = author
+                        else:
+                            user_type = author
+                            username = "You"
                         self.unread_messages.append(data)
-                        await asyncio.sleep(0.0)
+                        self.control_add_message(user_type, username, message, message_time, "", amount)
 
             await asyncio.sleep(4)
 
 
     async def clean_unread_messages(self):
+        if not self.unread_toggle:
+            return
         device_auth = self.device_storage.get_auth()
         url = f'http://{device_auth[0]}/messages'
         params = {"clean": self.contact_id}
@@ -1200,8 +1055,8 @@ class Chat(Box):
                 self.messages.append(data)
             self.messages_storage.delete_unread(self.contact_id)
             
+        self.hide_unread_label()
         self.unread_toggle = None
-        self.chat_output.remove(self.unread_label)
 
 
     def show_new_contact(self, view):
@@ -1219,16 +1074,6 @@ class Chat(Box):
         pending_dialog.show()
 
 
-    def _handle_on_scroll(self, scroll):
-        if self.output_scroll.vertical_position == self.output_scroll.max_vertical_position:
-            self.app.loop.create_task(self.clean_unread_messages())
-
-        if not self.scroll_toggle:
-            if self.output_scroll.vertical_position <= 0:
-                self.scroll_toggle = True
-                self.app.loop.create_task(self.load_old_messages())
-
-
     async def load_old_messages(self):
         messages = self.messages_storage.get_messages(self.contact_id)
         messages = sorted(messages, key=lambda x: x[3], reverse=True)
@@ -1237,15 +1082,19 @@ class Chat(Box):
             last_loaded_index = next(i for i, m in enumerate(messages) if m[3] == last_loaded_message_timestamp)
         except StopIteration:
             return
-        older_messages = messages[last_loaded_index + 1 : last_loaded_index + 6]
+        older_messages = messages[last_loaded_index + 1 : last_loaded_index + 11]
         if older_messages:
             self.last_message_timestamp = older_messages[-1][3]
             for data in older_messages:
-                message = Message(self.app, self.script_path, self.utils, self.units, data)
-                self.chat_output.insert(0, message)
-                await asyncio.sleep(0.0)
-            self.output_scroll.vertical_position = 10
-        self.scroll_toggle = None
+                author, message, amount, timestamp = data
+                message_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                if author != "you":
+                    user_type = "user"
+                    username = author
+                else:
+                    user_type = author
+                    username = "You"
+                self.control_insert_message(0, user_type, username, message, message_time, "", amount)
 
 
     def update_character_count(self, input):
@@ -1345,12 +1194,11 @@ class Chat(Box):
             if not value or fee < 0.0002:
                 self.fee_input._impl.native.setText("0.00020000")
         else:
-            self.app.loop.create_task(self.scroll_to_bottom())
-
-        
-    async def scroll_to_bottom(self):
-        await asyncio.sleep(0.5)
-        self.output_scroll.vertical_position = self.output_scroll.max_vertical_position
+            self.app.loop.create_task(self.adjust_chat())
+    
+    async def adjust_chat(self):
+        await asyncio.sleep(0.2)
+        self.scroll_to_bottom()
 
 
     def copy_messages_address(self, view):
@@ -1383,6 +1231,8 @@ class Messages(Box):
         self.chat = None
         self.is_active = None
         self.messages_toggle = None
+        self.read_messages = []
+        self.unread_messages = []
 
         x = self.utils.screen_resolution()
         if 1200 < x <= 1600:
@@ -1515,51 +1365,43 @@ class Messages(Box):
         await asyncio.sleep(1)
         sync_dialog.hide()
 
-        self.app.loop.create_task(self.update_messages())
-
 
     async def update_messages(self):
-        while True:
-            if not self.menu.server_status:
-                await asyncio.sleep(1)
-                continue
-            device_auth = self.device_storage.get_auth()
-            url = f'http://{device_auth[0]}/messages'
-            params = {"get": "read"}
-            result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
-            if result and "data" in result:
-                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
-                result = json.loads(decrypted)
-                for data in result:
-                    contact_id = data.get('id')
-                    author = data.get('author')
-                    message = data.get('message')
-                    amount = data.get('amount')
-                    timestamp = data.get('timestamp')
-                    if timestamp not in self.read_messages:
+        device_auth = self.device_storage.get_auth()
+        url = f'http://{device_auth[0]}/messages'
+        params = {"get": "read"}
+        result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
+        if result and "data" in result:
+            decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+            result = json.loads(decrypted)
+            for data in result:
+                contact_id = data.get('id')
+                author = data.get('author')
+                message = data.get('message')
+                amount = data.get('amount')
+                timestamp = data.get('timestamp')
+                if timestamp not in self.read_messages:
+                    self.messages_storage.message(contact_id, author, message, amount, timestamp)
+
+        params = {"get": "unread"}
+        result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
+        if result and "data" in result:
+            decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+            result = json.loads(decrypted)
+            for data in result:
+                contact_id = data.get('id')
+                author = data.get('author')
+                message = data.get('message')
+                amount = data.get('amount')
+                timestamp = data.get('timestamp')
+                if timestamp not in self.unread_messages:
+                    if self.chat.contact_id == contact_id:
                         self.messages_storage.message(contact_id, author, message, amount, timestamp)
-
-            params = {"get": "unread"}
-            result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
-            if result and "data" in result:
-                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
-                result = json.loads(decrypted)
-                for data in result:
-                    contact_id = data.get('id')
-                    author = data.get('author')
-                    message = data.get('message')
-                    amount = data.get('amount')
-                    timestamp = data.get('timestamp')
-                    if timestamp not in self.unread_messages:
-                        if self.chat.contact_id == contact_id:
-                            self.messages_storage.message(contact_id, author, message, amount, timestamp)
-                            if not self.is_active:
-                                self.app.notify.show(f"New Message", f"{author}: {message[:50]}")
-                        else:
-                            self.messages_storage.unread_message(contact_id, author, message, amount, timestamp)
+                        if not self.is_active:
                             self.app.notify.show(f"New Message", f"{author}: {message[:50]}")
-
-            await asyncio.sleep(10)
+                    else:
+                        self.messages_storage.unread_message(contact_id, author, message, amount, timestamp)
+                        self.app.notify.show(f"New Message", f"{author}: {message[:50]}")
 
 
     def load_chat(self):
@@ -1573,43 +1415,31 @@ class Messages(Box):
         self.add(self.chat)
 
         self.app.loop.create_task(self.update_balance())
-        self.app.loop.create_task(self.update_menu())
+        self.update_menu()
 
 
     async def update_balance(self):
-        while True:
-            if not self.is_active or not self.menu.server_status:
-                await asyncio.sleep(1)
-                continue
-            device_auth = self.device_storage.get_auth()
-            url = f'http://{device_auth[0]}/balance'
-            identity = self.messages_storage.get_identity()
-            params = {"address": identity}
-            result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
-            if result and "data" in result:
-                decrypted = self.units.decrypt_data(device_auth[2], result["data"])
-                result = json.loads(decrypted)
-                balance = result.get('balance')
-                self.chat.balances_value.text = self.units.format_balance(balance)
-
-            await asyncio.sleep(10)
+        device_auth = self.device_storage.get_auth()
+        url = f'http://{device_auth[0]}/balance'
+        identity = self.messages_storage.get_identity()
+        params = {"address": identity}
+        result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
+        if result and "data" in result:
+            decrypted = self.units.decrypt_data(device_auth[2], result["data"])
+            result = json.loads(decrypted)
+            balance = result.get('balance')
+            self.chat.balances_value.text = self.units.format_balance(balance)
 
 
-    async def update_menu(self):
-        while True:
-            if not self.is_active:
-                await asyncio.sleep(1)
-                continue
-            unread_messages = self.messages_storage.get_unread_messages()
-            if len(unread_messages) > 0:
-                self.chat.contacts_list.image = f"{self.script_path}/images/contacts_u.png"
-            else:
-                self.chat.contacts_list.image = f"{self.script_path}/images/contacts.png"
+    def update_menu(self):
+        unread_messages = self.messages_storage.get_unread_messages()
+        if len(unread_messages) > 0:
+            self.chat.contacts_list.image = f"{self.script_path}/images/contacts_u.png"
+        else:
+            self.chat.contacts_list.image = f"{self.script_path}/images/contacts.png"
 
-            pending = self.messages_storage.get_pending()
-            if len(pending) > 0:
-                self.chat.pending_contacts.image = f"{self.script_path}/images/pending_n.png"
-            else:
-                self.chat.pending_contacts.image = f"{self.script_path}/images/pending.png"
-
-            await asyncio.sleep(4)
+        pending = self.messages_storage.get_pending()
+        if len(pending) > 0:
+            self.chat.pending_contacts.image = f"{self.script_path}/images/pending_n.png"
+        else:
+            self.chat.pending_contacts.image = f"{self.script_path}/images/pending.png"

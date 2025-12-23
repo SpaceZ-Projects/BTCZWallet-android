@@ -1,18 +1,20 @@
 
 import asyncio
 import time
+import json
 from collections import deque
 import os
+from pathlib import Path
 
 from java import dynamic_proxy, cast, jclass
-from java.lang import Runnable, Boolean
+from java.lang import Runnable, Boolean, String
 from java.util import Arrays
 from java.io import FileInputStream, File
 from android.app import AlertDialog, NotificationChannel, NotificationManager, PendingIntent
 from android.os import Build, Handler
 from android.net import Uri
 from android.util import TypedValue, Log
-from android.view import View
+from android.view import View, ViewGroup
 from android.view.inputmethod import InputMethodManager
 from android.content import ClipboardManager, ClipData, Intent, DialogInterface, Context, ServiceConnection
 from android.text import InputType
@@ -26,8 +28,9 @@ from android.graphics.drawable import ColorDrawable, BitmapDrawable
 from androidx.activity.result import ActivityResultCallback
 from androidx.core.content import FileProvider
 from android.widget import Toast, RelativeLayout, LinearLayout, ImageView, ScrollView, PopupMenu
+from android.webkit import WebView, WebViewClient, WebChromeClient 
 
-from org.beeware.android import MainActivity, IPythonApp, PortraitCaptureActivity
+from org.beeware.android import MainActivity, IPythonApp, PortraitCaptureActivity, JSBridge
 
 from org.torproject.jni import TorService
 
@@ -186,6 +189,28 @@ class AppProxy(dynamic_proxy(IPythonApp)):
         self._back_callback = None
         self._qr_callback = None
         self._config_changed_callback = None
+        self._js_callback = None
+
+
+    def set_js_callback(self, callback):
+        self._js_callback = callback
+
+    def handle_js_message(self, message):
+        try:
+            if not message:
+                return
+            data = json.loads(message)
+            if isinstance(data, str) and data.strip().startswith("{"):
+                data = json.loads(data)
+            if isinstance(data, dict):
+                action = data.get("action")
+                if not action:
+                    return
+                event = {k: v for k, v in data.items() if k != "action"}
+                if callable(self._js_callback):
+                    self._js_callback(action, **event)
+        except Exception as e:
+            print(f"[ERROR] Failed to handle JS message: {e}")
         
 
     def onBackPressed(self):
@@ -289,7 +314,7 @@ class Notification:
         self._active_notifs.append(notif_id)
 
         icon_id = self.activity.getResources().getIdentifier(
-            "ic_launcher", "mipmap", self.activity.getPackageName()
+            "ic_launcher_round", "mipmap", self.activity.getPackageName()
         )
         builder = NotificationCompat.Builder(self.activity, self.CHANNEL_ID)
         builder.setSmallIcon(icon_id)
@@ -603,4 +628,63 @@ class TorController:
                 self.handler.removeCallbacksAndMessages(None)
             Log.i(self.TAG, "Tor stopped")
         except Exception as e:
-            Log.e(self.TAG, f"Error stopping Tor: {e}")       
+            Log.e(self.TAG, f"Error stopping Tor: {e}")
+
+
+
+_handler = None
+
+def set_handler(func):
+    global _handler
+    _handler = func
+
+def on_js_message(message):
+    if _handler:
+        _handler(message)
+    else:
+        print("⚠️ No JS handler registered, message:", message)
+
+
+class AndroidWebView:
+    def __init__(self, activity, content: Path, app_proxy: AppProxy, background_color=None):
+        self.activity = activity
+        self.content = content
+        self.app_proxy = app_proxy
+        self.background_color = background_color
+
+        self.control = WebView(activity)
+        self.control.setVisibility(View.VISIBLE)
+
+        settings = self.control.getSettings()
+        settings.setJavaScriptEnabled(True)
+        settings.setAllowFileAccess(True)
+        settings.setAllowFileAccessFromFileURLs(True)
+        settings.setAllowUniversalAccessFromFileURLs(True)
+        settings.setDomStorageEnabled(True)
+        settings.setSupportZoom(False)
+
+        bridge = JSBridge(app_proxy)
+        self.control.addJavascriptInterface(bridge, "AndroidBridge")
+
+        params = RelativeLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        self.control.setLayoutParams(params)
+        self.control.setWebViewClient(WebViewClient())
+        self.control.setWebChromeClient(WebChromeClient())
+
+        if background_color:
+            self.control.setBackgroundColor(background_color)
+
+    def attach_to(self, parent_layout: RelativeLayout):
+        parent_layout.addView(self.control)
+        self._load_content()
+
+    def _load_content(self):
+        if self.content.exists():
+            url = f"file:///{self.content.as_posix()}"
+            self.control.loadUrl(url)
+        else:
+            print(f"[WARN] HTML file not found: {self.content}")
+   
