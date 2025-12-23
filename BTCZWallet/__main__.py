@@ -277,7 +277,7 @@ def main():
         app_id = "com.btcz",
         home_page = "https://getbtcz.com",
         author = "BTCZCommunity",
-        version = "1.0.8"
+        version = "1.0.9"
     )
     app.main_loop()
 
