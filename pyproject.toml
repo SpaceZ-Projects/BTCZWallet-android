@@ -30,8 +30,8 @@ test_requires = [
 requires = [
     "toga-android==0.4.7",
     "travertino==0.3.0",
-    "aiohttp==3.13.1",
-    "aiohttp-socks==0.10.1",
+    "aiohttp==3.13.2",
+    "aiohttp-socks==0.11.0",
     "pillow",
     "qrcode",
     "pynacl"
@@ -55,6 +55,6 @@ build_gradle_dependencies = [
     "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0",
     "org.osmdroid:osmdroid-android:6.1.20",
     "com.journeyapps:zxing-android-embedded:4.3.0",
-    "info.guardianproject:tor-android:0.4.8.19",
+    "info.guardianproject:tor-android:0.4.8.21",
     "info.guardianproject:jtorctl:0.4.5.7"
 ]
