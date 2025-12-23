@@ -247,9 +247,7 @@ class Transactions(ScrollContainer):
         self.transactions_data = {}
         self.no_more_transactions = None
         self.scroll_toggle = None
-        self.transactions_toggle = None
         self.is_loading = None
-        self.is_active = None
 
         self.transactions_count = 20
         self.transactions_from = 0
@@ -264,12 +262,6 @@ class Transactions(ScrollContainer):
         )
 
         self.content = self.transactions_box
-
-
-    def update_toggle(self):
-        if not self.transactions_toggle:
-            self.transactions_toggle = True
-            self.app.loop.create_task(self.load_transactions())
 
 
     def get_transactions(self, limit, offset):

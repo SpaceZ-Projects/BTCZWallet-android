@@ -117,9 +117,6 @@ class Menu(OptionContainer):
         elif current_tab == "Send":
             self.send_page.is_active = True
             self.send_page.update_toggle()
-        elif current_tab == "Txs":
-            self.transactions_page.is_active = True
-            self.transactions_page.update_toggle()
         elif current_tab == "More":
             self.more_toggle = True
             self.app.loop.create_task(self._on_more_click())
