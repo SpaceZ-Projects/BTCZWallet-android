@@ -137,13 +137,13 @@ class TxsStorage:
         conn.close()
 
 
-    def get_transaction(self, txid):
+    def get_transaction(self, txid, amount):
         try:
             conn = sqlite3.connect(self.data)
             cursor = conn.cursor()
             cursor.execute(
-                'SELECT * FROM transactions WHERE txid = ?',
-                (txid,)
+                'SELECT * FROM transactions WHERE txid = ? AND amount = ?',
+                (txid, amount)
             )
             transaction = cursor.fetchone()
             conn.close()
@@ -152,18 +152,12 @@ class TxsStorage:
             return None
         
 
-    def get_transactions(self, option = None):
+    def get_transactions(self):
         try:
             conn = sqlite3.connect(self.data)
             cursor = conn.cursor()
-            if option:
-                cursor.execute(
-                    'SELECT txid FROM transactions'
-                )
-                transactions = [row[0] for row in cursor.fetchall()]
-            else:
-                cursor.execute('SELECT * FROM transactions')
-                transactions = cursor.fetchall()
+            cursor.execute('SELECT * FROM transactions')
+            transactions = cursor.fetchall()
             conn.close()
             return transactions
         except sqlite3.OperationalError:

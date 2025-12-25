@@ -114,9 +114,6 @@ class Menu(OptionContainer):
         current_tab = self.current_tab.text
         if current_tab == "Home":
             self.home_page.is_active = True
-        elif current_tab == "Send":
-            self.send_page.is_active = True
-            self.send_page.update_toggle()
         elif current_tab == "More":
             self.more_toggle = True
             self.app.loop.create_task(self._on_more_click())
@@ -383,15 +380,15 @@ class Menu(OptionContainer):
         if action == "update_info":
             self.app.loop.create_task(self.update_server_info())
             self.app.loop.create_task(self.update_transactions())
-            self.app.loop.create_task(self.update_balances())
         elif action == "update_messages":
             self.app.loop.create_task(self.messages_page.update_messages())
             self.app.loop.create_task(self.messages_page.update_balance())
         elif action == "update_contacts":
             self.app.loop.create_task(self.update_contacts())
+        elif action == "update_balances":
+            self.app.loop.create_task(self.update_balances())
         elif action == "update_transactions":
             self.app.loop.create_task(self.update_transactions())
-            self.app.loop.create_task(self.update_balances())
         elif action == "update_book":
             self.app.loop.create_task(self.update_address_book())
         elif action == "update_mining":
@@ -421,17 +418,42 @@ class Menu(OptionContainer):
             transparent = result.get('transparent')
             shielded = result.get('shielded')
             self.wallet_storage.update_balances(transparent, shielded)
+
+            await asyncio.sleep(1)
             self.home_page.update_balances()
+            self.send_page.update_balance()
 
 
     async def update_transactions(self):
-        transactions_data = self.txs_storage.get_transactions(True)
+        transactions_data = self.txs_storage.get_transactions()
         device_auth = self.device_storage.get_auth()
         url = f'http://{device_auth[0]}/transactions'
         result = await self.utils.make_request(device_auth[1], device_auth[2], url)
         if result and "data" in result:
             decrypted = self.units.decrypt_data(device_auth[2], result["data"])
             result = json.loads(decrypted)
+            def normalize_stored(tx):
+                return (
+                    tx[0],
+                    tx[1],
+                    tx[2],
+                    tx[3],
+                    float(tx[4]),
+                    int(tx[7]),
+                )
+            def normalize_remote(tx):
+                return (
+                    tx.get("type"),
+                    tx.get("category"),
+                    tx.get("address"),
+                    tx.get("txid"),
+                    float(tx.get("amount", 0)),
+                    int(tx.get("timestamp", 0)),
+                )
+            stored_index = {
+                normalize_stored(tx): tx
+                for tx in transactions_data
+            }
             for data in result:
                 tx_type = data.get('type')
                 category = data.get('category')
@@ -441,12 +463,16 @@ class Menu(OptionContainer):
                 blocks = data.get('blocks')
                 txfee = data.get('fee')
                 timestamp = data.get('timestamp')
-                if txid not in transactions_data:
+                tx_key = normalize_remote(data)
+                if tx_key not in stored_index:
                     self.insert_transaction(tx_type, category, address, txid, amount, blocks, txfee, timestamp)
                     if category == "receive":
                         self.app.notify.show(f"Receive", f"{amount} BTCZ")
                 else:
-                    self.update_blocks(txid, blocks)
+                    stored_tx = stored_index[tx_key]
+                    if stored_tx[5] != blocks:
+                        self.update_blocks(txid, blocks)
+            
             self.app.loop.create_task(self.home_page.update_transactions())
             self.app.loop.create_task(self.transactions_page.update_transactions())
 
@@ -472,6 +498,7 @@ class Menu(OptionContainer):
                 if address not in server_addresses:
                     self.addresses_storage.delete_address_book(address)
 
+            await asyncio.sleep(1)
             self.app.loop.create_task(self.book_page.update_address_book())
 
 
@@ -517,6 +544,7 @@ class Menu(OptionContainer):
                 if id not in server_pending:
                     self.messages_storage.delete_pending(id)
         
+        await asyncio.sleep(1)
         self.messages_page.update_menu()
 
 

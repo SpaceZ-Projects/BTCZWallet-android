@@ -300,9 +300,6 @@ class Home(Box):
             self.transactions_scroll
         )
 
-        self.update_balances()
-        self.app.loop.create_task(self.load_transactions())
-
 
     def update_status(self, status, color):
         height, currency, price = self.wallet_storage.get_info()
@@ -342,19 +339,6 @@ class Home(Box):
         return transactions
 
 
-    async def load_transactions(self):
-        transactions = self.get_transactions(20, 0)
-        for data in transactions:
-            txid = data[3]
-            transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
-            self.transactions_data[txid] = transaction_info
-            self.transactions_box.add(transaction_info)
-            await asyncio.sleep(0.0)
-
-        await asyncio.sleep(1)
-        self.app.loop.create_task(self.update_transactions())
-
-
     async def update_transactions(self):
         height = self.wallet_storage.get_info("height")
         transactions = self.get_transactions(20, 0)
@@ -363,21 +347,30 @@ class Home(Box):
             key=operator.itemgetter(7),
             reverse=False
         )
+        def normalize_stored(data):
+            return (
+                data[0],
+                data[1],
+                data[2],
+                data[3],
+                float(data[4]),
+                int(data[7]),
+            )
         for data in transactions:
             tx_type = data[0]
-            txid = data[3]
             blocks = data[5]
-            if txid not in self.transactions_data:
+            key = normalize_stored(data)
+            if key not in self.transactions_data:
                 transaction_info = Txid(self.app, self.main, self.script_path, self.utils, self.units, data)
                 self.transactions_box.insert(0, transaction_info)
-                self.transactions_data[txid] = transaction_info
+                self.transactions_data[key] = transaction_info
                 if len(self.transactions_data) > 20:
                     child = self.transactions_box.children[20]
                     self.transactions_box.remove(child)
                 await asyncio.sleep(0.0)
             else:
                 confirmations = 0
-                existing_tx = self.transactions_data[txid]
+                existing_tx = self.transactions_data[key]
                 if blocks > 0:
                     if tx_type == "shielded":
                         confirmations = height[0] - blocks

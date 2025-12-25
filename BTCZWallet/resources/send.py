@@ -187,8 +187,6 @@ class Send(Box):
         self.device_storage = DeviceStorage(self.app)
         self.addresses_storage = AddressesStorage(self.app)
 
-        self.send_toggle = None
-        self.is_active = None
         self.book_toggle = None
 
         x = self.utils.screen_resolution()
@@ -497,26 +495,14 @@ class Send(Box):
             self.send_button
         )
 
-    
-    def update_toggle(self):
-        if not self.send_toggle:
-            self.send_toggle = True
-            self.app.loop.create_task(self.update_balance())
 
-
-    async def update_balance(self):
-        while True:
-            if not self.is_active:
-                await asyncio.sleep(1)
-                continue
-            if self.switch_type.value is False:
-                if self.main.tbalance:
-                    self.current_balance_label.text = f"Balance : {self.units.format_balance(self.main.tbalance)}"
-            else:
-                if self.main.zbalance:
-                    self.current_balance_label.text = f"Balance : {self.units.format_balance(self.main.zbalance)}"
-
-            await asyncio.sleep(5)
+    def update_balance(self):
+        if self.switch_type.value is False:
+            if self.main.tbalance:
+                self.current_balance_label.text = f"Balance : {self.units.format_balance(self.main.tbalance)}"
+        else:
+            if self.main.zbalance:
+                self.current_balance_label.text = f"Balance : {self.units.format_balance(self.main.zbalance)}"
 
 
     def adjust_size(self):
