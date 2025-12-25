@@ -315,11 +315,11 @@ class Menu(OptionContainer):
             decrypted = self.units.decrypt_data(device_auth[2], result["data"])
             result = json.loads(decrypted)
             version = result.get('version')
-            min_version = (1, 5, 9)
+            min_version = (1, 6, 0)
             if not version:
                 self.main.error_dialog(
                     title="Update Required",
-                    message=f"Server version is too old. Please update to at least 1.5.9"
+                    message=f"Server version is too old. Please update to at least 1.6.0"
                 )
             else:
                 try:
@@ -333,7 +333,7 @@ class Menu(OptionContainer):
                     if version_tuple < min_version:
                         self.main.error_dialog(
                             title="Update Required",
-                            message=f"Server version {version} is too old. Please update to at least 1.5.9"
+                            message=f"Server version {version} is too old. Please update to at least 1.6.0"
                         )
                     else:
                         height = result.get('height')
