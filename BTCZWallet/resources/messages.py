@@ -1,7 +1,7 @@
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from toga import (
@@ -926,6 +926,31 @@ class Chat(Box):
         js_code = f"insertMessage(...{js_args});"
         self.chat_output.control.evaluateJavascript(js_code, None)
 
+
+    def control_pending_message(self, content: str, timestamp, amount):
+        message_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        args = [content, message_time, amount]
+        js_args = json.dumps(args, ensure_ascii=False)
+        js_code = f"addPendingMessage(...{js_args});"
+        self.chat_output.control.evaluateJavascript(js_code, None)
+
+    
+    def control_message_sent(self, timestamp):
+        message_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        args = [message_time]
+        js_args = json.dumps(args, ensure_ascii=False)
+        js_code = f"markMessageAsSent(...{js_args});"
+        self.chat_output.control.evaluateJavascript(js_code, None)
+
+
+    def control_message_failed(self, timestamp):
+        message_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        args = [message_time]
+        js_args = json.dumps(args, ensure_ascii=False)
+        js_code = f"markMessageAsFailed(...{js_args});"
+        self.chat_output.control.evaluateJavascript(js_code, None)
+
+
     def show_unread_label(self):
         self.chat_output.control.evaluateJavascript("showUnreadLabel();", None)
 
@@ -1149,16 +1174,20 @@ class Chat(Box):
         await self.send_message(message, fee)
 
 
-    async def send_message(self, message, amount):
+    async def send_message(self, message, fee):
+        timestamp = int(datetime.now(timezone.utc).timestamp())
+        amount = float(fee) - 0.0001
         self.disable_send_button()
+        self.control_pending_message(message, timestamp, amount)
         device_auth = self.device_storage.get_auth()
         url = f'http://{device_auth[0]}/messages'
-        params = {"send": self.contact_id, "message": message, "amount": amount}
+        params = {"send": self.contact_id, "message": message, "amount": fee}
         result = await self.utils.make_request(device_auth[1], device_auth[2], url, params)
         if not result:
             ToastMessage("No response - check your internet connection")
             self.enable_send_button()
         elif result and "error" in result:
+            self.control_message_failed(timestamp)
             self.enable_send_button()
             error_message = result.get('error')
             self.main.error_dialog(
@@ -1166,6 +1195,10 @@ class Chat(Box):
                 message=error_message
             )
         else:
+            timesent = result.get('timestamp')
+            data = "you", message, amount, timesent
+            self.messages.append(data)
+            self.control_message_sent(timestamp)
             self.message_input.value = ""
             self.fee_input._impl.native.setText("0.00020000")
             self.enable_send_button()
